@@ -1,10 +1,12 @@
+import itertools
 from collections.abc import Sequence
 from typing import Any
 
 import httpx
 
+from routeiq.adapters import polyline
 from routeiq.adapters.http import get_json
-from routeiq.domain.geo import LatLon
+from routeiq.domain.geo import METERS_PER_MILE, LatLon, haversine_miles
 from routeiq.domain.models import RouteCandidate
 from routeiq.ports import NoRouteFound, ProviderError
 
@@ -28,8 +30,10 @@ class OsrmRoutingProvider:
             {
                 "alternatives": alternatives if wants_alternatives else "false",
                 "overview": "full",
-                "geometries": "geojson",
-                "annotations": "distance,duration",
+                # polyline6 + duration-only is ~3x smaller than GeoJSON with both annotations.
+                "geometries": "polyline6",
+                "annotations": "duration",
+                # Leg summaries ("I 55, I 70") are only filled in when steps are requested.
                 "steps": "true",
             },
             json_error_statuses=frozenset({400}),
@@ -50,14 +54,11 @@ def parse_routes(data: Any) -> list[RouteCandidate]:
 
 
 def _parse_route(route: dict[str, Any]) -> RouteCandidate:
-    points = tuple(LatLon(lat=lat, lon=lon) for lon, lat in route["geometry"]["coordinates"])
-    distances: list[float] = []
-    durations: list[float] = []
-    for leg in route["legs"]:
-        distances.extend(leg["annotation"]["distance"])
-        durations.extend(leg["annotation"]["duration"])
-    if len(distances) != len(points) - 1 or len(durations) != len(distances):
+    points = tuple(polyline.decode(route["geometry"], precision=6))
+    durations = [d for leg in route["legs"] for d in leg["annotation"]["duration"]]
+    if len(durations) != len(points) - 1:
         raise ValueError("annotation count does not match geometry")
+    distances = [haversine_miles(a, b) * METERS_PER_MILE for a, b in itertools.pairwise(points)]
     summary = ", ".join(leg["summary"] for leg in route["legs"] if leg.get("summary"))
     return RouteCandidate(
         points=points,

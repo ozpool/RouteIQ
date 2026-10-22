@@ -8,13 +8,14 @@ import httpx
 import pytest
 from django.core.cache.backends.locmem import LocMemCache
 
+from routeiq.adapters import polyline
 from routeiq.adapters.cached_weather import CachedWeatherProvider
 from routeiq.adapters.open_meteo import OpenMeteoWeatherProvider, parse_forecasts
 from routeiq.adapters.osrm import OsrmRoutingProvider, parse_routes
 from routeiq.adapters.photon import parse_places
 from routeiq.domain.forecast import HourlyForecast
 from routeiq.domain.geo import METERS_PER_MILE, LatLon
-from routeiq.ports import NoRouteFound, ProviderError
+from routeiq.ports import NoRouteFound, ProviderError, ProviderRateLimited
 from tests.factories import CALM
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -61,6 +62,14 @@ class TestOsrm:
             "https://osrm.test",
         )
         with pytest.raises(NoRouteFound):
+            provider.route([DALLAS, FORT_WORTH], alternatives=3)
+
+    def test_rate_limit_is_a_distinct_error(self, monkeypatch) -> None:
+        monkeypatch.setattr("routeiq.adapters.http._BACKOFF_SECONDS", 0)
+        provider = OsrmRoutingProvider(
+            client_returning({"reason": "Too many requests"}, status=429), "https://osrm.test"
+        )
+        with pytest.raises(ProviderRateLimited):
             provider.route([DALLAS, FORT_WORTH], alternatives=3)
 
     def test_server_error_is_provider_error(self) -> None:
@@ -150,7 +159,7 @@ class TestCachedWeather:
         start = datetime(2026, 10, 22, 6, tzinfo=UTC)
         provider.hourly_forecast([DALLAS], start, start)
         result = provider.hourly_forecast([FORT_WORTH, DALLAS, FORT_WORTH], start, start)
-        assert inner.requested[1] == [FORT_WORTH.rounded(2)]
+        assert inner.requested[1] == [FORT_WORTH.rounded(1)]
         assert len(result) == 3
 
 
@@ -158,3 +167,14 @@ def test_photon_labels() -> None:
     places = parse_places(load("photon_dallas.json"))
     assert places[0].label == "Dallas, Texas, United States"
     assert places[0].point.lat == pytest.approx(32.78, abs=0.1)
+
+
+def test_polyline_decodes_reference_example() -> None:
+    points = polyline.decode("_p~iF~ps|U_ulLnnqC_mqNvxq`@", precision=5)
+    assert points == [LatLon(38.5, -120.2), LatLon(40.7, -120.95), LatLon(43.252, -126.453)]
+
+
+def test_osrm_haversine_distance_matches_reported_distance() -> None:
+    data = load("osrm_dallas_fortworth.json")
+    for parsed, raw in zip(parse_routes(data), data["routes"], strict=True):
+        assert parsed.distance_m == pytest.approx(raw["distance"], rel=0.005)

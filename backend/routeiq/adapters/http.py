@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from routeiq.ports import ProviderError
+from routeiq.ports import ProviderError, ProviderRateLimited
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,8 @@ def get_json(
         if response.status_code in _RETRY_STATUSES and attempt < _ATTEMPTS:
             time.sleep(_BACKOFF_SECONDS * attempt)
             continue
+        if response.status_code == 429:
+            raise ProviderRateLimited(provider, _error_detail(response))
         if response.status_code >= 400 and response.status_code not in json_error_statuses:
             raise ProviderError(provider, _error_detail(response))
         try:

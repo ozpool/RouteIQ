@@ -22,6 +22,10 @@ class NoRouteFound(ProviderError):
     pass
 
 
+class ProviderRateLimited(ProviderError):
+    pass
+
+
 class RoutingProvider(Protocol):
     def route(self, waypoints: Sequence[LatLon], alternatives: int) -> list[RouteCandidate]:
         """Routes through `waypoints` in order; up to `alternatives` routes when there are two."""

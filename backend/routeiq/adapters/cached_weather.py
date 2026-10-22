@@ -9,8 +9,11 @@ from routeiq.domain.geo import LatLon
 from routeiq.domain.models import Weather
 from routeiq.ports import WeatherProvider
 
-_KEY_VERSION = "v1"
-_PRECISION = 2  # ~1 km: well inside one forecast-model grid cell
+_KEY_VERSION = "v2"
+# 0.1° (~7 mi) is about the forecast model's own grid beyond its first day. Snapping to it lets
+# nearby checkpoints and overlapping routes share one upstream lookup, which keeps long trips
+# under Open-Meteo's per-minute location quota.
+_PRECISION = 1
 
 _Row = tuple[float, float | None, float, float]
 
