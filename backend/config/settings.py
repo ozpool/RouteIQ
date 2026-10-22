@@ -79,7 +79,9 @@ STORAGES = {
 
 if env.is_production:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = env.secure_ssl_redirect
+    # Platform health checks call the container over plain HTTP.
+    SECURE_REDIRECT_EXEMPT = [r"^api/health$"]
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30
     SECURE_CONTENT_TYPE_NOSNIFF = True
 

@@ -1,0 +1,18 @@
+# Render blueprint: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: routeiq
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: routeiq.onrender.com
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://routeiq.onrender.com
+      - key: HTTP_USER_AGENT
+        value: RouteIQ/1.0 (+https://routeiq.onrender.com)

@@ -30,6 +30,8 @@ class AppSettings(BaseSettings):
     allowed_hosts: str = "localhost,127.0.0.1"
     cors_allowed_origins: str = "http://localhost:5173"
     csrf_trusted_origins: str = ""
+    # Production only; turn off when nothing in front of the app terminates TLS.
+    secure_ssl_redirect: bool = True
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     cache_url: str = ""
