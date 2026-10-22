@@ -1,0 +1,22 @@
+# Production-like local run: one container serving API + SPA, plus Redis for the shared cache.
+#   cp .env.example .env   # then set SECRET_KEY
+#   docker compose up --build   → http://localhost:8080
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      CSRF_TRUSTED_ORIGINS: http://localhost:8080
+      CACHE_URL: redis://redis:6379/0
+      # Local compose has no TLS terminator in front of it.
+      SECURE_SSL_REDIRECT: "false"
+    ports:
+      - "8080:8000"
+    depends_on:
+      - redis
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
