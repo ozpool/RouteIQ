@@ -653,3 +653,104 @@ p {
   box-shadow: var(--shadow);
   padding: 12px 14px;
 }
+
+/* ---------------------------------------------------------------- route comparison */
+
+.comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.comparison__title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.comparison__scroll {
+  overflow-x: auto;
+}
+
+.comparison table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.comparison th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 4px 5px;
+  white-space: nowrap;
+}
+
+.comparison td {
+  padding: 6px 5px;
+  border-top: 1px solid var(--surface-alt);
+  white-space: nowrap;
+}
+
+.comparison tbody tr {
+  cursor: pointer;
+}
+
+.comparison tbody tr:hover,
+.comparison tbody tr.is-active {
+  background: #eef6f4;
+}
+
+.comparison__route {
+  font-weight: 600;
+}
+
+.comparison__dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+}
+
+.comparison__worst {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.comparison__rule {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.pill--map {
+  background: var(--ink);
+  color: #fff;
+}
+
+.route-card__max {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.route-card__chevron {
+  font-size: 13px;
+  color: var(--muted);
+  width: 10px;
+}
+
+.route-card.is-expanded:not(.is-selected) {
+  border-color: #9fb3bc;
+}

@@ -23,10 +23,12 @@ def exception_handler(exc: Exception, context: dict[str, Any]) -> Response | Non
         return _error("no_route", "No drivable route was found between these points.", 422)
     if isinstance(exc, ProviderRateLimited):
         logger.warning("Upstream rate limit: %s", exc)
+        # The provider says whether the limit is per minute, hour or day; pass that on.
+        detail = exc.message.removeprefix("HTTP 429: ")
         return _error(
             "provider_rate_limited",
-            f"The {exc.provider} service is rate limiting us. Wait a minute and retry, "
-            "or use a wider checkpoint interval for very long trips.",
+            f"The {exc.provider} service is rate limiting requests: {detail} "
+            "Very long trips use fewer lookups with a wider checkpoint interval.",
             status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     if isinstance(exc, ProviderError):

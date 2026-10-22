@@ -1,54 +1,60 @@
-import { useEffect, useState } from "react";
 import type { Heatmap } from "../../api/types";
 import { formatClock } from "../../domain/format";
 import { RISK_COLOR, RISK_LABEL, RISK_LEVELS } from "../../domain/risk";
 import type { TruckState } from "../../domain/truckPosition";
 
-const PLAY_STEP_MS = 450;
+/** The slider moves in 15-minute steps so the truck marker moves smoothly between checkpoints. */
+export const SLIDER_STEP_HOURS = 0.25;
 
 interface HeatmapControlProps {
   heatmap: Heatmap | undefined;
   isLoading: boolean;
   error: string | null;
-  hour: number;
-  onHourChange: (hour: number) => void;
+  offsetHours: number;
+  maxOffsetHours: number;
+  onOffsetChange: (hours: number) => void;
   isVisible: boolean;
   onVisibleChange: (visible: boolean) => void;
   truck: TruckState | null;
+  isPlaying: boolean;
+  canPlay: boolean;
+  onTogglePlay: () => void;
+  playbackNote: string | null;
 }
 
-export function heatmapHourTime(heatmap: Heatmap, hour: number): Date {
-  return new Date(Date.parse(heatmap.start_time) + hour * 3_600_000);
+export function heatmapStart(heatmap: Heatmap): Date {
+  return new Date(heatmap.start_time);
+}
+
+function formatOffset(hours: number): string {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return m ? `+${h}h ${String(m).padStart(2, "0")}m` : `+${h}h`;
 }
 
 function truckLabel(truck: TruckState | null): string {
   if (!truck) return "";
   if (truck.status === "waiting") return "Truck not departed yet";
   if (truck.status === "arrived") return "Truck has arrived";
-  return `Truck near mile ${truck.mile.toFixed(0)}`;
+  return `Truck at mile ${truck.mile.toFixed(0)}`;
 }
 
 export function HeatmapControl({
   heatmap,
   isLoading,
   error,
-  hour,
-  onHourChange,
+  offsetHours,
+  maxOffsetHours,
+  onOffsetChange,
   isVisible,
   onVisibleChange,
   truck,
+  isPlaying,
+  canPlay,
+  onTogglePlay,
+  playbackNote,
 }: HeatmapControlProps) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const lastHour = heatmap ? heatmap.hours - 1 : 48;
-
-  useEffect(() => {
-    if (!isPlaying) return;
-    const timer = window.setInterval(() => {
-      onHourChange(hour >= lastHour ? 0 : hour + 1);
-    }, PLAY_STEP_MS);
-    return () => window.clearInterval(timer);
-  }, [isPlaying, hour, lastHour, onHourChange]);
-
   return (
     <section className="heatmap-control" aria-label="Corridor weather forecast">
       <div className="heatmap-control__row">
@@ -63,12 +69,13 @@ export function HeatmapControl({
         <span className="heatmap-control__time" aria-live="polite">
           {heatmap ? (
             <>
-              <strong>+{hour}h</strong> · {formatClock(heatmapHourTime(heatmap, hour))}
+              <strong>{formatOffset(offsetHours)}</strong> ·{" "}
+              {formatClock(new Date(heatmapStart(heatmap).getTime() + offsetHours * 3_600_000))}
             </>
           ) : isLoading ? (
             "Loading forecast…"
           ) : (
-            error ?? "Plan a trip to see the forecast"
+            (error ?? "Plan a trip to see the forecast")
           )}
         </span>
       </div>
@@ -76,9 +83,10 @@ export function HeatmapControl({
         <button
           type="button"
           className="button button--icon"
-          onClick={() => setIsPlaying((playing) => !playing)}
-          disabled={!heatmap}
-          aria-label={isPlaying ? "Pause forecast animation" : "Play forecast animation"}
+          onClick={onTogglePlay}
+          disabled={!canPlay}
+          aria-label={isPlaying ? "Pause trip playback" : "Play trip checkpoint by checkpoint"}
+          title={isPlaying ? "Pause" : "Drive the selected route checkpoint by checkpoint"}
         >
           {isPlaying ? "❚❚" : "▶"}
         </button>
@@ -86,12 +94,12 @@ export function HeatmapControl({
           type="range"
           className="heatmap-control__slider"
           min={0}
-          max={lastHour}
-          step={1}
-          value={hour}
+          max={maxOffsetHours}
+          step={SLIDER_STEP_HOURS}
+          value={offsetHours}
           disabled={!heatmap}
-          onChange={(event) => onHourChange(Number(event.target.value))}
-          aria-label="Forecast hour after departure"
+          onChange={(event) => onOffsetChange(Number(event.target.value))}
+          aria-label="Forecast time after departure hour"
         />
       </div>
       <div className="heatmap-control__row heatmap-control__foot">
@@ -103,7 +111,7 @@ export function HeatmapControl({
             </li>
           ))}
         </ul>
-        <span className="muted">{truckLabel(truck)}</span>
+        <span className="muted">{playbackNote ?? truckLabel(truck)}</span>
       </div>
     </section>
   );

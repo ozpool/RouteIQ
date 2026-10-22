@@ -21,10 +21,17 @@ needed.
   level that is above Low ("Load 42,000 lb raises wind risk High → Severe").
 - **Recommendation**: fewest No Travel → Severe → High miles → lowest average risk → shortest
   time, with the deciding criterion shown.
+- **Every route, not just the winner**: a comparison table shows each route's miles per risk
+  level, average risk, drive time, number of forecast checkpoints and worst condition. Each route
+  card opens its own checkpoint weather table; click an open card to close it, so several routes
+  can be compared side by side.
 - **Map**: the selected route is coloured by risk segment; checkpoints link to the table; other
   routes are dashed and clickable.
-- **Corridor heatmap** with a 0–48 h slider and play button, plus a truck marker showing where the
-  selected route puts the truck at that hour.
+- **Corridor heatmap** with a 0–48 h slider (15-minute steps) and a truck marker showing where the
+  selected route puts the truck at that time.
+- **Trip playback**: ▶ drives the selected route checkpoint by checkpoint in ETA order, opening
+  each checkpoint's weather, moving the heatmap to that hour, and stopping when the truck
+  arrives.
 
 ## Quick start
 
@@ -113,7 +120,7 @@ Request and response shapes are in [docs/LLD.md §10](docs/LLD.md#10-http-api) a
 ## Tests and checks
 
 ```bash
-make test    # 112 backend tests (pytest) + frontend tests (vitest)
+make test    # 113 backend tests (pytest) + 12 frontend tests (vitest)
 make lint    # ruff + TypeScript strict typecheck
 ```
 

@@ -92,7 +92,7 @@ export function TripMap({
     const bounds = boundsOf(plan.routes.flatMap(routeLine));
     if (bounds) {
       mapRef.current?.fitBounds(bounds, {
-        padding: { top: 60, bottom: 140, left: 60, right: 60 },
+        padding: { top: 60, bottom: 190, left: 60, right: 60 },
         duration: 900,
       });
     }

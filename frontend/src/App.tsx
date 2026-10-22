@@ -1,10 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "./api/client";
 import { fetchHeatmap, planTrip } from "./api/trips";
 import type { Place, PlanTripRequest, TripPlan } from "./api/types";
+import { hoursBetween, nextCheckpoint } from "./domain/playback";
 import { truckStateAt } from "./domain/truckPosition";
-import { HeatmapControl, heatmapHourTime } from "./features/heatmap/HeatmapControl";
+import { HeatmapControl, heatmapStart } from "./features/heatmap/HeatmapControl";
 import { routeLine, thinLine } from "./features/map/geojson";
 import { TripMap } from "./features/map/TripMap";
 import { RouteList } from "./features/routes/RouteList";
@@ -12,6 +13,8 @@ import { TripForm } from "./features/trip-form/TripForm";
 
 // The heatmap endpoint accepts up to 5000 points per line; the corridor grid is far coarser.
 const HEATMAP_LINE_POINTS = 1500;
+// Long enough to read each checkpoint's popup as the truck reaches it.
+const PLAYBACK_STEP_MS = 1100;
 
 interface PlannedTrip {
   id: number;
@@ -28,8 +31,10 @@ export function App() {
   const [destination, setDestination] = useState<Place | null>(null);
   const [trip, setTrip] = useState<PlannedTrip | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [expandedRouteIds, setExpandedRouteIds] = useState<ReadonlySet<string>>(new Set());
   const [activeCheckpoint, setActiveCheckpoint] = useState<number | null>(null);
-  const [heatmapHour, setHeatmapHour] = useState(0);
+  const [offsetHours, setOffsetHours] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const tripCounter = useRef(0);
 
@@ -38,8 +43,10 @@ export function App() {
     onSuccess: (plan, request) => {
       setTrip({ id: ++tripCounter.current, request, plan });
       setSelectedRouteId(plan.recommendation.route_id);
+      setExpandedRouteIds(new Set([plan.recommendation.route_id]));
       setActiveCheckpoint(null);
-      setHeatmapHour(0);
+      setOffsetHours(0);
+      setIsPlaying(false);
     },
   });
 
@@ -64,15 +71,90 @@ export function App() {
   const heatmap = heatmapQuery.data;
   const selectedRoute = plan?.routes.find((route) => route.id === selectedRouteId);
 
+  const startMs = heatmap ? heatmapStart(heatmap).getTime() : null;
+  const maxOffsetHours = heatmap ? heatmap.hours - 1 : 48;
+  const heatmapHour = Math.min(maxOffsetHours, Math.floor(offsetHours + 1e-9));
+  const timeAt = (hours: number) => new Date((startMs ?? 0) + hours * 3_600_000);
+
   const truck = useMemo(
-    () => (selectedRoute && heatmap ? truckStateAt(selectedRoute, heatmapHourTime(heatmap, heatmapHour)) : null),
-    [selectedRoute, heatmap, heatmapHour],
+    () =>
+      selectedRoute && startMs !== null
+        ? truckStateAt(selectedRoute, new Date(startMs + offsetHours * 3_600_000))
+        : null,
+    [selectedRoute, startMs, offsetHours],
   );
+
+  const jumpToCheckpoint = useCallback(
+    (index: number) => {
+      const checkpoint = selectedRoute?.checkpoints[index];
+      if (!checkpoint || startMs === null) return;
+      const hours = hoursBetween(new Date(startMs), new Date(checkpoint.eta));
+      setOffsetHours(Math.min(maxOffsetHours, hours));
+      setActiveCheckpoint(index);
+    },
+    [selectedRoute, startMs, maxOffsetHours],
+  );
+
+  // Playback: advance to the next checkpoint, one at a time, and stop when the truck arrives.
+  useEffect(() => {
+    if (!isPlaying || !selectedRoute || startMs === null) return;
+    const timer = window.setTimeout(() => {
+      const now = new Date(startMs + offsetHours * 3_600_000);
+      const windowEnd = new Date(startMs + maxOffsetHours * 3_600_000);
+      const next = nextCheckpoint(selectedRoute, now, windowEnd);
+      if (next) jumpToCheckpoint(next.index);
+      else setIsPlaying(false);
+    }, PLAYBACK_STEP_MS);
+    return () => window.clearTimeout(timer);
+  }, [isPlaying, selectedRoute, startMs, offsetHours, maxOffsetHours, jumpToCheckpoint]);
+
+  const togglePlay = () => {
+    if (isPlaying) return setIsPlaying(false);
+    if (!selectedRoute || startMs === null) return;
+    // Finished (or past the forecast window): replay from the first checkpoint.
+    if (!nextCheckpoint(selectedRoute, timeAt(offsetHours), timeAt(maxOffsetHours))) {
+      jumpToCheckpoint(0);
+    }
+    setIsPlaying(true);
+  };
+
+  const lastCheckpoint = selectedRoute?.checkpoints[selectedRoute.checkpoints.length - 1];
+  const playbackNote =
+    lastCheckpoint &&
+    startMs !== null &&
+    Date.parse(lastCheckpoint.eta) > timeAt(maxOffsetHours).getTime() &&
+    truck?.status !== "waiting"
+      ? "Trip runs past the 48 h forecast window"
+      : null;
 
   const selectRoute = useCallback((routeId: string) => {
     setSelectedRouteId(routeId);
     setActiveCheckpoint(null);
+    setIsPlaying(false);
   }, []);
+
+  const toggleRoute = useCallback(
+    (routeId: string) => {
+      const isOpen = expandedRouteIds.has(routeId);
+      setExpandedRouteIds((open) => {
+        const next = new Set(open);
+        if (isOpen) next.delete(routeId);
+        else next.add(routeId);
+        return next;
+      });
+      if (!isOpen) selectRoute(routeId);
+    },
+    [expandedRouteIds, selectRoute],
+  );
+
+  const selectCheckpoint = useCallback(
+    (routeId: string, index: number) => {
+      if (routeId !== selectedRouteId) selectRoute(routeId);
+      setIsPlaying(false);
+      setActiveCheckpoint(index);
+    },
+    [selectedRouteId, selectRoute],
+  );
 
   return (
     <div className="app">
@@ -104,9 +186,11 @@ export function App() {
           <RouteList
             plan={plan}
             selectedRouteId={selectedRouteId}
+            expandedRouteIds={expandedRouteIds}
             onSelectRoute={selectRoute}
+            onToggleRoute={toggleRoute}
             activeCheckpoint={activeCheckpoint}
-            onSelectCheckpoint={setActiveCheckpoint}
+            onSelectCheckpoint={selectCheckpoint}
           />
         ) : (
           !planning.isPending && (
@@ -126,7 +210,10 @@ export function App() {
           selectedRouteId={selectedRouteId}
           onSelectRoute={selectRoute}
           activeCheckpoint={activeCheckpoint}
-          onSelectCheckpoint={setActiveCheckpoint}
+          onSelectCheckpoint={(index) => {
+            setIsPlaying(false);
+            setActiveCheckpoint(index);
+          }}
           heatmap={heatmap}
           heatmapHour={heatmapHour}
           showHeatmap={showHeatmap}
@@ -137,11 +224,19 @@ export function App() {
           heatmap={heatmap}
           isLoading={heatmapQuery.isFetching}
           error={heatmapQuery.isError ? errorMessage(heatmapQuery.error) : null}
-          hour={heatmapHour}
-          onHourChange={setHeatmapHour}
+          offsetHours={offsetHours}
+          maxOffsetHours={maxOffsetHours}
+          onOffsetChange={(hours) => {
+            setIsPlaying(false);
+            setOffsetHours(hours);
+          }}
           isVisible={showHeatmap}
           onVisibleChange={setShowHeatmap}
           truck={truck}
+          isPlaying={isPlaying}
+          canPlay={Boolean(selectedRoute && heatmap)}
+          onTogglePlay={togglePlay}
+          playbackNote={playbackNote}
         />
       </main>
     </div>
