@@ -59,7 +59,11 @@ def _parse_route(route: dict[str, Any]) -> RouteCandidate:
     if len(durations) != len(points) - 1:
         raise ValueError("annotation count does not match geometry")
     distances = [haversine_miles(a, b) * METERS_PER_MILE for a, b in itertools.pairwise(points)]
-    summary = ", ".join(leg["summary"] for leg in route["legs"] if leg.get("summary"))
+    # Detour routes have two legs that often repeat the same road names.
+    roads = [
+        road.strip() for leg in route["legs"] for road in (leg.get("summary") or "").split(",")
+    ]
+    summary = ", ".join(dict.fromkeys(road for road in roads if road))
     return RouteCandidate(
         points=points,
         segment_distances_m=tuple(float(d) for d in distances),
