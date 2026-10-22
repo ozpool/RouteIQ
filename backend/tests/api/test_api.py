@@ -101,7 +101,11 @@ def test_plan_validation(api: APIClient, overrides, field: str) -> None:
     [
         (ProviderError("osrm", "HTTP 503"), 502, "provider_unavailable"),
         (NoRouteFound("osrm", "no route"), 422, "no_route"),
-        (ProviderRateLimited("open-meteo", "HTTP 429"), 503, "provider_rate_limited"),
+        (
+            ProviderRateLimited("open-meteo", "HTTP 429: Hourly limit."),
+            503,
+            "provider_rate_limited",
+        ),
     ],
 )
 def test_provider_failures_map_to_clear_errors(monkeypatch, exc, status, code) -> None:
@@ -144,3 +148,16 @@ def test_geocode(api: APIClient) -> None:
         "Dallas, Texas"
     )
     assert api.get("/api/geocode", {"q": "D"}).status_code == 400
+
+
+def test_rate_limit_message_passes_provider_reason(monkeypatch) -> None:
+    class Limited:
+        def route(self, waypoints, alternatives):
+            raise ProviderRateLimited("open-meteo", "HTTP 429: Hourly API request limit exceeded.")
+
+    cache.clear()
+    monkeypatch.setattr("routeiq.api.views.get_container", lambda: container_with(Limited()))
+    message = (
+        APIClient().post("/api/trips/plan", plan_body(), format="json").json()["error"]["message"]
+    )
+    assert "Hourly API request limit exceeded." in message
