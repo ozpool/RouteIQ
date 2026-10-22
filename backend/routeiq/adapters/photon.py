@@ -28,9 +28,10 @@ class PhotonGeocoder:
             self._client,
             PROVIDER,
             f"{self._base_url}/api/",
-            {"q": query, "limit": limit, "lang": "en"},
+            # Over-fetch because duplicate labels are dropped.
+            {"q": query, "limit": limit * 2, "lang": "en"},
         )
-        places = parse_places(data)
+        places = parse_places(data)[:limit]
         self._cache.set(key, places, timeout=self._ttl)
         return places
 
@@ -45,16 +46,16 @@ def _label(properties: dict[str, Any]) -> str:
 
 
 def parse_places(data: Any) -> list[Place]:
+    """Places in provider order; a city, its county and its boundary often share one label,
+    so only the first (most relevant) place per label is kept."""
+    places: dict[str, Place] = {}
     try:
-        return [
-            Place(
-                label=_label(feature["properties"]),
-                point=LatLon(
-                    lat=float(feature["geometry"]["coordinates"][1]),
-                    lon=float(feature["geometry"]["coordinates"][0]),
-                ),
-            )
-            for feature in data["features"]
-        ]
+        for feature in data["features"]:
+            label = _label(feature["properties"])
+            if label in places:
+                continue
+            lon, lat = feature["geometry"]["coordinates"][:2]
+            places[label] = Place(label=label, point=LatLon(lat=float(lat), lon=float(lon)))
     except (KeyError, TypeError, ValueError, IndexError) as exc:
         raise ProviderError(PROVIDER, f"malformed geocoding payload ({exc})") from exc
+    return list(places.values())

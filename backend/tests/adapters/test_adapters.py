@@ -56,6 +56,15 @@ class TestOsrm:
         assert seen[1].url.params["alternatives"] == "false"
         assert seen[0].url.path.startswith("/route/v1/driving/-96.797000,32.776700;")
 
+    def test_summary_drops_repeated_road_names_across_legs(self) -> None:
+        data = load("osrm_dallas_fortworth.json")
+        route = data["routes"][0]
+        route["legs"] = [dict(route["legs"][0]), dict(route["legs"][0])]
+        route["legs"][1]["annotation"] = {"duration": []}
+        route["legs"][0]["summary"] = "I 70, US 40"
+        route["legs"][1]["summary"] = "I 70, I 55"
+        assert parse_routes(data)[0].summary == "I 70, US 40, I 55"
+
     def test_no_route_is_a_distinct_error(self) -> None:
         provider = OsrmRoutingProvider(
             client_returning({"code": "NoRoute", "message": "Impossible route"}, status=400),
@@ -178,3 +187,10 @@ def test_osrm_haversine_distance_matches_reported_distance() -> None:
     data = load("osrm_dallas_fortworth.json")
     for parsed, raw in zip(parse_routes(data), data["routes"], strict=True):
         assert parsed.distance_m == pytest.approx(raw["distance"], rel=0.005)
+
+
+def test_photon_keeps_first_place_per_label() -> None:
+    data = load("photon_dallas.json")
+    data["features"].append(data["features"][0])
+    labels = [place.label for place in parse_places(data)]
+    assert len(labels) == len(set(labels))
