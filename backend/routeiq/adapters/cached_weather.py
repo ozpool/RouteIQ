@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -9,11 +10,12 @@ from routeiq.domain.geo import LatLon
 from routeiq.domain.models import Weather
 from routeiq.ports import WeatherProvider
 
-_KEY_VERSION = "v2"
-# 0.1° (~7 mi) is about the forecast model's own grid beyond its first day. Snapping to it lets
-# nearby checkpoints and overlapping routes share one upstream lookup, which keeps long trips
-# under Open-Meteo's per-minute location quota.
-_PRECISION = 1
+_KEY_VERSION = "v3"
+# Callers snap points to the shared lookup grid (domain/weather_grid.py); rounding here only
+# makes cache keys stable.
+_PRECISION = 2
+
+logger = logging.getLogger(__name__)
 
 _Row = tuple[float, float | None, float, float]
 
@@ -52,6 +54,13 @@ class CachedWeatherProvider:
         found: dict[str, Any] = self._cache.get_many(keys.values())
         missing = [p for p in unique if any(keys[p, d] not in found for d in days)]
 
+        logger.info(
+            "weather lookup: %d points, %d unique, %d from cache, %d upstream",
+            len(points),
+            len(unique),
+            len(unique) - len(missing),
+            len(missing),
+        )
         if missing:
             first_hour = datetime.combine(days[0], time(0), tzinfo=start.tzinfo)
             last_hour = datetime.combine(days[-1], time(23), tzinfo=start.tzinfo)

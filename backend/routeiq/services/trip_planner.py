@@ -9,8 +9,12 @@ from routeiq.domain.models import Checkpoint, RouteAssessment, TripPlan
 from routeiq.domain.recommendation import recommend
 from routeiq.domain.risk import assess
 from routeiq.domain.scoring import summarize
+from routeiq.domain.weather_grid import snap_to_grid
 from routeiq.ports import WeatherProvider
 from routeiq.services.route_options import RouteOptionsService
+
+# Upstream weather lookups per plan, across all routes (see domain/weather_grid.py).
+MAX_CHECKPOINT_LOOKUPS = 250
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,11 +45,12 @@ class TripPlanner:
             for profile in profiles
         ]
 
-        # One batched forecast call for every checkpoint of every route.
+        # One batched forecast call for every checkpoint of every route, on the shared grid.
         flat = [placement for route in placements for placement in route]
         latest_eta = max(placement.eta for placement in flat)
+        _, lookup_points = snap_to_grid([p.point for p in flat], MAX_CHECKPOINT_LOOKUPS)
         forecasts = iter(
-            self._weather.hourly_forecast([p.point for p in flat], request.departure, latest_eta)
+            self._weather.hourly_forecast(lookup_points, request.departure, latest_eta)
         )
 
         routes = []

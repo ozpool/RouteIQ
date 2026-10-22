@@ -150,11 +150,18 @@ class Geocoder(Protocol):
 Errors: `ProviderError` (upstream down / bad payload → HTTP 502), `ProviderRateLimited`
 (upstream 429 → HTTP 503 with advice), `NoRouteFound` (→ 422).
 
-`CachedWeatherProvider` decorates any `WeatherProvider`: it snaps points to a 0.1° grid (~7 mi,
-close to the forecast model's own resolution), stores one 24-hour series per grid point and UTC
-day in the Django cache (`WEATHER_CACHE_TTL_SECONDS`), and only sends missing points upstream.
-Snapping lets neighbouring checkpoints and overlapping routes share a lookup, which keeps a
-coast-to-coast trip at 10-mile spacing under Open-Meteo's free per-minute quota.
+**Weather lookup budget** (`domain/weather_grid.py`). Open-Meteo's free tier counts every location
+(~600/minute, 5,000/hour). All lookups use one shared grid: 0.2° (~12 mi), coarsened
+(0.3°, 0.4°, … 1.5°) only when a request would exceed its budget: 250 lookups for a plan's
+checkpoints, 150 cells for a heatmap. Each checkpoint still reads the forecast for its own ETA;
+only its lookup position moves to the cell center. Because heatmap cells sit on the same grid,
+the heatmap reuses the checkpoint lookups from the cache. A whole trip costs at most ~400
+lookups (LA → New York at 10-mile spacing: 237 + 137). `OPEN_METEO_API_KEY` (with the customer
+API base URL) removes the limit.
+
+`CachedWeatherProvider` decorates any `WeatherProvider`: it stores one 24-hour series per point
+and UTC day in the Django cache (`WEATHER_CACHE_TTL_SECONDS`), only sends missing points
+upstream, and logs how many lookups were cached vs fetched.
 `OpenMeteoWeatherProvider` batches 100 points per call and runs batches in parallel.
 
 `OsrmRoutingProvider` asks for `polyline6` geometry with duration-only annotations (about 3x

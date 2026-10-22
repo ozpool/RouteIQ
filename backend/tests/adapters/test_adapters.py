@@ -127,12 +127,25 @@ class TestOpenMeteo:
             self.END - timedelta(minutes=30),
         )
         params = seen[0].url.params
+        assert "apikey" not in params
         assert params["wind_speed_unit"] == "mph"
         assert params["precipitation_unit"] == "inch"
         assert (params["start_hour"], params["end_hour"]) == (
             "2026-10-22T18:00",
             "2026-10-22T21:00",
         )
+
+
+def test_open_meteo_sends_api_key_when_configured() -> None:
+    seen: list[httpx.Request] = []
+    provider = OpenMeteoWeatherProvider(
+        client_returning(load("open_meteo_two_points.json"), seen=seen),
+        "https://customer-om.test",
+        api_key="test-key",
+    )
+    start = datetime(2026, 10, 22, 18, tzinfo=UTC)
+    provider.hourly_forecast([DALLAS, FORT_WORTH], start, start + timedelta(hours=3))
+    assert seen[0].url.params["apikey"] == "test-key"
 
 
 class CountingWeather:
@@ -168,7 +181,7 @@ class TestCachedWeather:
         start = datetime(2026, 10, 22, 6, tzinfo=UTC)
         provider.hourly_forecast([DALLAS], start, start)
         result = provider.hourly_forecast([FORT_WORTH, DALLAS, FORT_WORTH], start, start)
-        assert inner.requested[1] == [FORT_WORTH.rounded(1)]
+        assert inner.requested[1] == [FORT_WORTH.rounded(2)]
         assert len(result) == 3
 
 
