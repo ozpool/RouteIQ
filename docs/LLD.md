@@ -23,7 +23,7 @@ backend/
 │   │   ├── similarity.py   route overlap (dedupe alternatives)
 │   │   └── corridor.py     grid cells within the corridor around the routes
 │   ├── ports.py            RoutingProvider, WeatherProvider, Geocoder protocols + errors
-│   ├── adapters/           osrm.py, open_meteo.py, photon.py, cached_weather.py, http.py
+│   ├── adapters/           osrm.py (+ polyline.py), open_meteo.py, photon.py, cached_weather.py, http.py
 │   ├── services/           route_options.py, trip_planner.py, heatmap.py
 │   ├── container.py        composition root: builds adapters + services from AppSettings
 │   └── api/                serializers (input), presenters (output), views, urls, errors
@@ -147,12 +147,21 @@ class Geocoder(Protocol):
     def search(self, query: str, limit: int) -> list[Place]: ...
 ```
 
-Errors: `ProviderError` (upstream down / bad payload → HTTP 502), `NoRouteFound` (→ 422).
+Errors: `ProviderError` (upstream down / bad payload → HTTP 502), `ProviderRateLimited`
+(upstream 429 → HTTP 503 with advice), `NoRouteFound` (→ 422).
 
-`CachedWeatherProvider` decorates any `WeatherProvider`: it rounds points to 0.01°, stores one
-series per point and UTC day in the Django cache (`WEATHER_CACHE_TTL_SECONDS`), and only sends
-the missing points upstream. `OpenMeteoWeatherProvider` batches 100 points per call and runs
-batches in parallel.
+`CachedWeatherProvider` decorates any `WeatherProvider`: it snaps points to a 0.1° grid (~7 mi,
+close to the forecast model's own resolution), stores one 24-hour series per grid point and UTC
+day in the Django cache (`WEATHER_CACHE_TTL_SECONDS`), and only sends missing points upstream.
+Snapping lets neighbouring checkpoints and overlapping routes share a lookup, which keeps a
+coast-to-coast trip at 10-mile spacing under Open-Meteo's free per-minute quota.
+`OpenMeteoWeatherProvider` batches 100 points per call and runs batches in parallel.
+
+`OsrmRoutingProvider` asks for `polyline6` geometry with duration-only annotations (about 3x
+smaller than GeoJSON with both annotations) and computes segment distances with haversine.
+`steps=true` is kept only because OSRM fills leg summaries ("I 55, I 70") from steps; repeated
+road names across detour legs are removed. `PhotonGeocoder` keeps the first place per label,
+since a city, its county and its boundary often share one label.
 
 ## 10. HTTP API
 
