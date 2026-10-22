@@ -9,7 +9,8 @@ interface RouteCardProps {
   rank: number;
   isRecommended: boolean;
   isSelected: boolean;
-  onSelect: () => void;
+  isExpanded: boolean;
+  onToggle: () => void;
   activeCheckpoint: number | null;
   onSelectCheckpoint: (index: number) => void;
 }
@@ -19,20 +20,31 @@ export function RouteCard({
   rank,
   isRecommended,
   isSelected,
-  onSelect,
+  isExpanded,
+  onToggle,
   activeCheckpoint,
   onSelectCheckpoint,
 }: RouteCardProps) {
   const miles = route.risk.miles_by_level;
   return (
-    <article className={`route-card${isSelected ? " is-selected" : ""}`}>
-      <button type="button" className="route-card__summary" onClick={onSelect} aria-expanded={isSelected}>
+    <article className={`route-card${isSelected ? " is-selected" : ""}${isExpanded ? " is-expanded" : ""}`}>
+      <button
+        type="button"
+        className="route-card__summary"
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        title={isExpanded ? "Hide checkpoints" : "Show checkpoints and highlight on map"}
+      >
         <div className="route-card__title">
           <span className="route-card__rank">#{rank}</span>
           <h3>{route.label}</h3>
           {isRecommended && <span className="pill pill--recommended">Recommended</span>}
+          {isSelected && <span className="pill pill--map">On map</span>}
           <span className="route-card__max">
             <RiskBadge level={route.risk.max_level} />
+            <span className="route-card__chevron" aria-hidden="true">
+              {isExpanded ? "▾" : "▸"}
+            </span>
           </span>
         </div>
         {route.summary && <p className="route-card__via">via {route.summary}</p>}
@@ -60,7 +72,7 @@ export function RouteCard({
           <span>{formatMiles(miles.severe)} Severe</span> · <span>{formatMiles(miles.high)} High</span>
         </p>
       </button>
-      {isSelected && (
+      {isExpanded && (
         <CheckpointList
           checkpoints={route.checkpoints}
           activeIndex={activeCheckpoint}
