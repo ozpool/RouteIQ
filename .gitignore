@@ -1,0 +1,31 @@
+# env
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+backend/staticfiles/
+*.sqlite3
+
+# node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# tooling
+.code-review-graph/
+.claude/
+.DS_Store
+.idea/
+.vscode/
+
+# source brief
+*.pdf
