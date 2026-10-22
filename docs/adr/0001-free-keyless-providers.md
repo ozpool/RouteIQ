@@ -22,5 +22,7 @@ Each is an adapter behind `RoutingProvider`, `WeatherProvider` or `Geocoder` in
   short trips.
 - Public OSRM often returns only 1–2 alternatives, so `RouteOptionsService` adds via-point
   detours to reach three distinct routes.
-- Open-Meteo's free tier caps location lookups per minute. We batch, cache and snap to 0.1°,
-  and report a 429 as a distinct `provider_rate_limited` error.
+- Open-Meteo's free tier counts every location (~600/minute, 5,000/hour). Lookups are snapped to a
+  shared grid with a per-request budget (250 checkpoint lookups, 150 heatmap cells), cached per
+  day, and a 429 is reported as `provider_rate_limited` with the provider's reason. A paid key
+  (`OPEN_METEO_API_KEY`) lifts the limit.

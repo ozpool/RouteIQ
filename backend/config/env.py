@@ -38,6 +38,8 @@ class AppSettings(BaseSettings):
 
     osrm_base_url: str = "https://router.project-osrm.org"
     open_meteo_base_url: str = "https://api.open-meteo.com"
+    # Paid plans lift the free per-minute/hour quota; use with the customer-api base URL.
+    open_meteo_api_key: SecretStr = SecretStr("")
     photon_base_url: str = "https://photon.komoot.io"
     http_timeout_seconds: float = Field(default=12.0, gt=0, le=60)
     http_user_agent: str = "RouteIQ/1.0 (weather-aware truck routing)"

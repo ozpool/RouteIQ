@@ -2,11 +2,12 @@ import math
 from collections.abc import Sequence
 
 from routeiq.domain.geo import LatLon, densify, haversine_miles
+from routeiq.domain.weather_grid import GRID_SIZES_DEG, cell_center
 
-CORRIDOR_RADIUS_MI = 30.0
-MAX_CELLS = 400
-# Coarsen the grid until the corridor fits MAX_CELLS; 0.2° is close to the forecast model grid.
-CELL_SIZES_DEG = (0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5)
+CORRIDOR_RADIUS_MI = 25.0
+# Lookup budget for one heatmap: with the checkpoint budget this keeps a whole trip well under
+# the weather provider's per-minute quota.
+MAX_CELLS = 150
 _SAMPLE_STEP_MI = 10.0
 _MILES_PER_DEG_LAT = 69.0
 
@@ -26,8 +27,7 @@ def _cells_for(
                     math.floor((sample.lon - dlon) / size),
                     math.floor((sample.lon + dlon) / size) + 1,
                 ):
-                    center = LatLon((i + 0.5) * size, (j + 0.5) * size)
-                    if haversine_miles(center, sample) <= radius_mi:
+                    if haversine_miles(cell_center((i, j), size), sample) <= radius_mi:
                         cells.add((i, j))
     return cells
 
@@ -38,11 +38,8 @@ def corridor_cells(
     max_cells: int = MAX_CELLS,
 ) -> tuple[float, tuple[LatLon, ...]]:
     """Grid cell centers within `radius_mi` of any line, on the finest grid that fits."""
-    for size in CELL_SIZES_DEG:
+    for size in GRID_SIZES_DEG:
         cells = _cells_for(lines, size, radius_mi)
         if len(cells) <= max_cells:
             break
-    centers = tuple(
-        LatLon(round((i + 0.5) * size, 4), round((j + 0.5) * size, 4)) for i, j in sorted(cells)
-    )
-    return size, centers
+    return size, tuple(cell_center(cell, size) for cell in sorted(cells))
