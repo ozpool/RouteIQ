@@ -27,7 +27,11 @@ class Container:
 def build_container(settings: AppSettings) -> Container:
     client = build_client(settings.http_timeout_seconds, settings.http_user_agent)
     weather = CachedWeatherProvider(
-        OpenMeteoWeatherProvider(client, settings.open_meteo_base_url),
+        OpenMeteoWeatherProvider(
+            client,
+            settings.open_meteo_base_url,
+            api_key=settings.open_meteo_api_key.get_secret_value(),
+        ),
         cache,
         settings.weather_cache_ttl_seconds,
     )

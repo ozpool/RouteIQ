@@ -19,10 +19,16 @@ _HOUR_FORMAT = "%Y-%m-%dT%H:%M"
 
 class OpenMeteoWeatherProvider:
     def __init__(
-        self, client: httpx.Client, base_url: str, batch_size: int = 100, max_workers: int = 4
+        self,
+        client: httpx.Client,
+        base_url: str,
+        api_key: str = "",
+        batch_size: int = 100,
+        max_workers: int = 4,
     ):
         self._client = client
         self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
         self._batch_size = batch_size
         self._max_workers = max_workers
 
@@ -40,21 +46,19 @@ class OpenMeteoWeatherProvider:
     def _fetch(
         self, points: Sequence[LatLon], start: datetime, end: datetime
     ) -> list[HourlyForecast]:
-        data = get_json(
-            self._client,
-            PROVIDER,
-            f"{self._base_url}/v1/forecast",
-            {
-                "latitude": ",".join(f"{p.lat:.4f}" for p in points),
-                "longitude": ",".join(f"{p.lon:.4f}" for p in points),
-                "hourly": ",".join(HOURLY_VARIABLES),
-                "wind_speed_unit": "mph",
-                "precipitation_unit": "inch",
-                "timezone": "UTC",
-                "start_hour": start.strftime(_HOUR_FORMAT),
-                "end_hour": end.strftime(_HOUR_FORMAT),
-            },
-        )
+        params = {
+            "latitude": ",".join(f"{p.lat:.4f}" for p in points),
+            "longitude": ",".join(f"{p.lon:.4f}" for p in points),
+            "hourly": ",".join(HOURLY_VARIABLES),
+            "wind_speed_unit": "mph",
+            "precipitation_unit": "inch",
+            "timezone": "UTC",
+            "start_hour": start.strftime(_HOUR_FORMAT),
+            "end_hour": end.strftime(_HOUR_FORMAT),
+        }
+        if self._api_key:
+            params["apikey"] = self._api_key
+        data = get_json(self._client, PROVIDER, f"{self._base_url}/v1/forecast", params)
         return parse_forecasts(data, expected_points=len(points), start=start, end=end)
 
 

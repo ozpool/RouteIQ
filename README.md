@@ -120,7 +120,7 @@ Request and response shapes are in [docs/LLD.md §10](docs/LLD.md#10-http-api) a
 ## Tests and checks
 
 ```bash
-make test    # 113 backend tests (pytest) + 12 frontend tests (vitest)
+make test    # 117 backend tests (pytest) + 12 frontend tests (vitest)
 make lint    # ruff + TypeScript strict typecheck
 ```
 
@@ -145,5 +145,7 @@ responses gzipped). `render.yaml` is a one-click Render blueprint; any Docker ho
 - Forecasts come from public models; skill drops after ~48 h. Departure is limited to the next
   7 days.
 - Hours-of-service breaks are not modelled; ETAs assume continuous driving.
-- The free Open-Meteo tier limits lookups per minute. Very long trips at 10-mile spacing can hit
-  it; the API then returns a clear `provider_rate_limited` error.
+- The free Open-Meteo tier counts every location (~600/minute, 5,000/hour). Each trip is capped at
+  ~400 lookups by snapping lookups to a shared ~12 mi grid (coarser only for very long trips), and
+  repeats come from the cache. Many brand-new trips in one hour can still hit the hourly limit;
+  the app then shows the provider's reason. Set `OPEN_METEO_API_KEY` to remove the limit.
