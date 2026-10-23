@@ -8,7 +8,7 @@ import httpx
 import pytest
 from django.core.cache.backends.locmem import LocMemCache
 
-from routeiq.adapters import polyline
+from routeiq.adapters import polyline, provider_status
 from routeiq.adapters.cached_weather import CachedWeatherProvider
 from routeiq.adapters.open_meteo import OpenMeteoWeatherProvider, parse_forecasts
 from routeiq.adapters.osrm import OsrmRoutingProvider, parse_routes
@@ -82,6 +82,14 @@ class TestOsrm:
         with pytest.raises(ProviderRateLimited):
             provider.route([DALLAS, FORT_WORTH], alternatives=3)
         assert len(seen) == 1
+        assert provider_status.provider_status("osrm")["status"] == "rate_limited"
+
+    def test_successful_call_is_recorded_for_health(self) -> None:
+        provider = OsrmRoutingProvider(
+            client_returning(load("osrm_dallas_fortworth.json")), "https://osrm.test"
+        )
+        provider.route([DALLAS, FORT_WORTH], alternatives=3)
+        assert provider_status.provider_status("osrm")["status"] == "ok"
 
     def test_server_error_is_provider_error(self) -> None:
         provider = OsrmRoutingProvider(client_returning({}, status=500), "https://osrm.test")
