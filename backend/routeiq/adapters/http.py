@@ -8,7 +8,8 @@ from routeiq.ports import ProviderError, ProviderRateLimited
 
 logger = logging.getLogger(__name__)
 
-_RETRY_STATUSES = frozenset({429, 502, 503, 504})
+# Not 429: per-minute and per-hour quotas don't clear in a second, so a retry only spends quota.
+_RETRY_STATUSES = frozenset({502, 503, 504})
 _ATTEMPTS = 3
 _BACKOFF_SECONDS = 0.4
 
@@ -41,7 +42,7 @@ def get_json(
     params: dict[str, Any],
     json_error_statuses: frozenset[int] = frozenset(),
 ) -> Any:
-    """GET and decode JSON. Retries rate limits and gateway errors; raises ProviderError.
+    """GET and decode JSON. Retries gateway errors; raises ProviderError.
 
     Statuses in `json_error_statuses` return their body so the adapter can read the error code.
     """
