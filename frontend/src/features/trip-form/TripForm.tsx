@@ -1,11 +1,17 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, memo, useState } from "react";
 import type { CheckpointInterval, Place, PlanTripRequest } from "../../api/types";
 import { localZoneName, nextQuarterHour, toLocalInputValue } from "../../domain/format";
+import { FieldError, invalidProps } from "./FieldError";
 import { PlaceInput } from "./PlaceInput";
+import { MAX_DAYS_AHEAD, MAX_LOAD_LB, type TripFormErrors, validateTripForm } from "./validation";
 
 const INTERVALS: CheckpointInterval[] = [10, 25, 50];
-const MAX_LOAD_LB = 80_000;
-const MAX_DAYS_AHEAD = 7;
+const FIELD_IDS: Record<keyof TripFormErrors, string> = {
+  origin: "origin",
+  destination: "destination",
+  departure: "departure",
+  load: "load",
+};
 
 interface TripFormProps {
   isSubmitting: boolean;
@@ -16,7 +22,7 @@ interface TripFormProps {
   onDestinationChange: (place: Place | null) => void;
 }
 
-export function TripForm({
+export const TripForm = memo(function TripForm({
   isSubmitting,
   onSubmit,
   origin,
@@ -27,55 +33,68 @@ export function TripForm({
   const [departure, setDeparture] = useState(() => toLocalInputValue(nextQuarterHour()));
   const [load, setLoad] = useState("42000");
   const [interval, setCheckpointInterval] = useState<CheckpointInterval>(25);
-  const [error, setError] = useState<string | null>(null);
+  const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
 
-  const minDeparture = toLocalInputValue(new Date(Date.now() - 60 * 60_000));
-  const maxDeparture = toLocalInputValue(new Date(Date.now() + MAX_DAYS_AHEAD * 86_400_000));
+  const now = new Date();
+  const errors = validateTripForm({ origin, destination, departure, load }, now, hasTriedSubmit);
+  const minDeparture = toLocalInputValue(new Date(now.getTime() - 60 * 60_000));
+  const maxDeparture = toLocalInputValue(new Date(now.getTime() + MAX_DAYS_AHEAD * 86_400_000));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const loadLb = Number(load);
-    const departureDate = new Date(departure);
-    if (!origin || !destination) return setError("Pick an origin and a destination from the list.");
-    if (!Number.isFinite(loadLb) || loadLb < 1 || loadLb > MAX_LOAD_LB)
-      return setError(`Load must be between 1 and ${MAX_LOAD_LB.toLocaleString()} lb.`);
-    if (Number.isNaN(departureDate.getTime())) return setError("Enter a departure date and time.");
-    setError(null);
+    setHasTriedSubmit(true);
+    const finalErrors = validateTripForm({ origin, destination, departure, load }, new Date(), true);
+    const firstInvalid = (Object.keys(FIELD_IDS) as (keyof TripFormErrors)[]).find((key) => finalErrors[key]);
+    if (firstInvalid || !origin || !destination) {
+      if (firstInvalid) document.getElementById(FIELD_IDS[firstInvalid])?.focus();
+      return;
+    }
     onSubmit({
       origin,
       destination,
-      departure_time: departureDate.toISOString(),
-      load_weight_lb: loadLb,
+      departure_time: new Date(departure).toISOString(),
+      load_weight_lb: Number(load),
       checkpoint_interval_mi: interval,
     });
   };
 
   return (
     <form className="trip-form" onSubmit={submit} noValidate>
-      <PlaceInput label="Origin" value={origin} onChange={onOriginChange} placeholder="e.g. Chicago, IL" />
       <PlaceInput
+        id={FIELD_IDS.origin}
+        label="Origin"
+        value={origin}
+        onChange={onOriginChange}
+        placeholder="e.g. Chicago, IL"
+        error={errors.origin}
+      />
+      <PlaceInput
+        id={FIELD_IDS.destination}
         label="Destination"
         value={destination}
         onChange={onDestinationChange}
         placeholder="e.g. St. Louis, MO"
+        error={errors.destination}
       />
       <div className="field-row">
         <div className="field">
-          <label htmlFor="departure">Departure ({localZoneName()})</label>
+          <label htmlFor={FIELD_IDS.departure}>Departure ({localZoneName()})</label>
           <input
-            id="departure"
+            id={FIELD_IDS.departure}
             type="datetime-local"
             value={departure}
             min={minDeparture}
             max={maxDeparture}
             onChange={(event) => setDeparture(event.target.value)}
             required
+            {...invalidProps(FIELD_IDS.departure, errors.departure)}
           />
+          <FieldError id={FIELD_IDS.departure} message={errors.departure} />
         </div>
         <div className="field">
-          <label htmlFor="load">Load weight (lb)</label>
+          <label htmlFor={FIELD_IDS.load}>Load weight (lb)</label>
           <input
-            id="load"
+            id={FIELD_IDS.load}
             type="number"
             inputMode="numeric"
             min={1}
@@ -84,7 +103,9 @@ export function TripForm({
             value={load}
             onChange={(event) => setLoad(event.target.value)}
             required
+            {...invalidProps(FIELD_IDS.load, errors.load)}
           />
+          <FieldError id={FIELD_IDS.load} message={errors.load} />
         </div>
       </div>
       <fieldset className="field segmented">
@@ -102,14 +123,9 @@ export function TripForm({
           </label>
         ))}
       </fieldset>
-      {error && (
-        <p className="alert alert--error" role="alert">
-          {error}
-        </p>
-      )}
       <button type="submit" className="button button--primary" disabled={isSubmitting}>
         {isSubmitting ? "Checking routes and forecast…" : "Find safest route"}
       </button>
     </form>
   );
-}
+});

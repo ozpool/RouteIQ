@@ -25,10 +25,6 @@ export function localZoneName(): string {
   return zoneFormat.formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value ?? "";
 }
 
-export function formatPounds(pounds: number): string {
-  return `${pounds.toLocaleString()} lb`;
-}
-
 /** `YYYY-MM-DDTHH:mm` in local time, the format <input type="datetime-local"> expects. */
 export function toLocalInputValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");

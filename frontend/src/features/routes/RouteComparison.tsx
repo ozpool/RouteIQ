@@ -43,7 +43,7 @@ export function RouteComparison({ plan, selectedRouteId, onSelectRoute }: RouteC
               <th scope="col">Severe</th>
               <th scope="col">High</th>
               <th scope="col">Mod.</th>
-              <th scope="col" title="Distance-weighted risk, 0 (Low) to 4 (No Travel)">Avg</th>
+              <th scope="col" title="Risk-miles: each mile times its level, Moderate 1 to No Travel 4">Exp.</th>
               <th scope="col">Time</th>
               <th scope="col" title="Weather samples">Pts</th>
             </tr>
@@ -71,7 +71,9 @@ export function RouteComparison({ plan, selectedRouteId, onSelectRoute }: RouteC
                   <td>{miles.severe.toFixed(0)}</td>
                   <td>{miles.high.toFixed(0)}</td>
                   <td>{miles.moderate.toFixed(0)}</td>
-                  <td>{route.risk.average.toFixed(2)}</td>
+                  <td title={`Average ${route.risk.average.toFixed(2)} / 4 per mile`}>
+                    {route.risk.exposure.toFixed(0)}
+                  </td>
                   <td>{formatDuration(route.duration_s)}</td>
                   <td>{route.checkpoints.length}</td>
                 </tr>
@@ -88,8 +90,8 @@ export function RouteComparison({ plan, selectedRouteId, onSelectRoute }: RouteC
         ))}
       </ul>
       <p className="comparison__rule">
-        Ranked by fewest No Travel → Severe → High miles, then lowest average risk, then shortest
-        time. Miles are in mi.
+        Ranked by fewest No Travel → Severe → High miles, then least weather exposure (risk-miles,
+        so a detour cannot dilute the same bad miles), then shortest time. Miles are in mi.
       </p>
     </div>
   );

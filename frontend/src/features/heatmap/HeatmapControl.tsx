@@ -1,29 +1,20 @@
-import type { Heatmap } from "../../api/types";
-import { formatClock } from "../../domain/format";
+import { type CSSProperties, memo } from "react";
+import type { Checkpoint, Heatmap, Route } from "../../api/types";
+import { formatClock, localZoneName } from "../../domain/format";
+import { hoursBetween } from "../../domain/playback";
 import { RISK_COLOR, RISK_LABEL, RISK_LEVELS } from "../../domain/risk";
 import type { TruckState } from "../../domain/truckPosition";
-
-/** The slider moves in 15-minute steps so the truck marker moves smoothly between checkpoints. */
-export const SLIDER_STEP_HOURS = 0.25;
+import { HEATMAP_OPACITY } from "../map/layers";
+import { type Playback, SLIDER_STEP_HOURS } from "./usePlayback";
 
 interface HeatmapControlProps {
   heatmap: Heatmap | undefined;
+  route: Route | undefined;
   isLoading: boolean;
   error: string | null;
-  offsetHours: number;
-  maxOffsetHours: number;
-  onOffsetChange: (hours: number) => void;
+  playback: Playback;
   isVisible: boolean;
   onVisibleChange: (visible: boolean) => void;
-  truck: TruckState | null;
-  isPlaying: boolean;
-  canPlay: boolean;
-  onTogglePlay: () => void;
-  playbackNote: string | null;
-}
-
-export function heatmapStart(heatmap: Heatmap): Date {
-  return new Date(heatmap.start_time);
 }
 
 function formatOffset(hours: number): string {
@@ -40,37 +31,80 @@ function truckLabel(truck: TruckState | null): string {
   return `Truck at mile ${truck.mile.toFixed(0)}`;
 }
 
+function stepTitle(direction: "Previous" | "Next", checkpoint: Checkpoint | null): string {
+  if (!checkpoint) return direction === "Previous" ? "At the first checkpoint" : "No later checkpoint in the window";
+  return `${direction} checkpoint: mile ${checkpoint.mile.toFixed(0)}, ${formatClock(checkpoint.eta)}`;
+}
+
+function hexAlpha(hex: string, opacity: number): string {
+  return `${hex}${Math.round(opacity * 255)
+    .toString(16)
+    .padStart(2, "0")}`;
+}
+
+/** One tick per checkpoint, coloured by its risk, so the steps between checkpoints are visible. */
+const CheckpointTicks = memo(function CheckpointTicks({
+  route,
+  startMs,
+  maxOffsetHours,
+}: {
+  route: Route;
+  startMs: number;
+  maxOffsetHours: number;
+}) {
+  const last = route.checkpoints.length - 1;
+  return (
+    <div className="slider-ticks" aria-hidden="true">
+      {route.checkpoints.map((checkpoint, i) => {
+        const hours = hoursBetween(new Date(startMs), new Date(checkpoint.eta));
+        if (hours < 0 || hours > maxOffsetHours) return null;
+        const style = {
+          "--at": hours / maxOffsetHours,
+          background: RISK_COLOR[checkpoint.risk.level],
+        } as CSSProperties;
+        return (
+          <span key={checkpoint.index} className={i === last ? "slider-ticks__arrival" : undefined} style={style} />
+        );
+      })}
+    </div>
+  );
+});
+
 export function HeatmapControl({
   heatmap,
+  route,
   isLoading,
   error,
-  offsetHours,
-  maxOffsetHours,
-  onOffsetChange,
+  playback,
   isVisible,
   onVisibleChange,
-  truck,
-  isPlaying,
-  canPlay,
-  onTogglePlay,
-  playbackNote,
 }: HeatmapControlProps) {
+  const { startMs, offsetHours, maxOffsetHours, previous, next, isPlaying } = playback;
+  const canStep = Boolean(route && heatmap);
+  const clock = startMs !== null ? formatClock(new Date(startMs + offsetHours * 3_600_000)) : "";
+  const zone = localZoneName();
+
   return (
     <section className="heatmap-control" aria-label="Corridor weather forecast">
       <div className="heatmap-control__row">
         <label className="toggle">
-          <input
-            type="checkbox"
-            checked={isVisible}
-            onChange={(event) => onVisibleChange(event.target.checked)}
-          />
+          <input type="checkbox" checked={isVisible} onChange={(event) => onVisibleChange(event.target.checked)} />
           Corridor heatmap
         </label>
-        <span className="heatmap-control__time" aria-live="polite">
+        {playback.canTripOnly && (
+          <label className="toggle toggle--quiet" title="End the slider at the selected route's arrival">
+            <input
+              type="checkbox"
+              checked={playback.isTripOnly}
+              onChange={(event) => playback.setTripOnly(event.target.checked)}
+            />
+            Trip only
+          </label>
+        )}
+        <span className="heatmap-control__time">
           {heatmap ? (
             <>
-              <strong>{formatOffset(offsetHours)}</strong> ·{" "}
-              {formatClock(new Date(heatmapStart(heatmap).getTime() + offsetHours * 3_600_000))}
+              <strong>{formatOffset(offsetHours)}</strong> · {clock} {zone}
             </>
           ) : isLoading ? (
             "Loading forecast…"
@@ -80,38 +114,75 @@ export function HeatmapControl({
         </span>
       </div>
       <div className="heatmap-control__row">
-        <button
-          type="button"
-          className="button button--icon"
-          onClick={onTogglePlay}
-          disabled={!canPlay}
-          aria-label={isPlaying ? "Pause trip playback" : "Play trip checkpoint by checkpoint"}
-          title={isPlaying ? "Pause" : "Drive the selected route checkpoint by checkpoint"}
-        >
-          {isPlaying ? "❚❚" : "▶"}
-        </button>
-        <input
-          type="range"
-          className="heatmap-control__slider"
-          min={0}
-          max={maxOffsetHours}
-          step={SLIDER_STEP_HOURS}
-          value={offsetHours}
-          disabled={!heatmap}
-          onChange={(event) => onOffsetChange(Number(event.target.value))}
-          aria-label="Forecast time after departure hour"
-        />
+        <div className="heatmap-control__buttons" role="group" aria-label="Trip playback">
+          <button
+            type="button"
+            className="button button--icon button--quiet"
+            onClick={() => previous && playback.goToCheckpoint(previous.index)}
+            disabled={!canStep || !previous}
+            aria-label="Previous checkpoint"
+            title={stepTitle("Previous", previous)}
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <path fill="currentColor" d="M3 2h2v12H3zM14 2v12L6 8z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="button button--icon"
+            onClick={playback.togglePlay}
+            disabled={!canStep}
+            aria-label={isPlaying ? "Pause trip playback" : "Play trip checkpoint by checkpoint"}
+            title={isPlaying ? "Pause" : "Drive the selected route checkpoint by checkpoint"}
+          >
+            {isPlaying ? "❚❚" : "▶"}
+          </button>
+          <button
+            type="button"
+            className="button button--icon button--quiet"
+            onClick={() => next && playback.goToCheckpoint(next.index)}
+            disabled={!canStep || !next}
+            aria-label="Next checkpoint"
+            title={stepTitle("Next", next)}
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <path fill="currentColor" d="M11 2h2v12h-2zM2 2v12l8-6z" />
+            </svg>
+          </button>
+        </div>
+        <div className="heatmap-control__track">
+          <input
+            type="range"
+            className="heatmap-control__slider"
+            min={0}
+            max={maxOffsetHours}
+            step={SLIDER_STEP_HOURS}
+            value={offsetHours}
+            disabled={!heatmap}
+            onChange={(event) => playback.scrub(Number(event.target.value))}
+            aria-label="Forecast time after departure hour"
+            aria-valuetext={heatmap ? `${formatOffset(offsetHours)}, ${clock} ${zone}` : undefined}
+          />
+          {route && startMs !== null && (
+            <CheckpointTicks route={route} startMs={startMs} maxOffsetHours={maxOffsetHours} />
+          )}
+        </div>
       </div>
       <div className="heatmap-control__row heatmap-control__foot">
-        <ul className="legend">
-          {RISK_LEVELS.map((level) => (
+        <ul className="legend" aria-label="Heatmap risk levels">
+          {RISK_LEVELS.map((level, i) => (
             <li key={level}>
-              <span style={{ background: RISK_COLOR[level] }} />
+              <span
+                style={{
+                  background: hexAlpha(RISK_COLOR[level], HEATMAP_OPACITY[i] ?? 1),
+                  borderColor: RISK_COLOR[level],
+                }}
+              />
               {RISK_LABEL[level]}
             </li>
           ))}
         </ul>
-        <span className="muted">{playbackNote ?? truckLabel(truck)}</span>
+        <span className="muted">{playback.note ?? truckLabel(playback.truck)}</span>
       </div>
     </section>
   );

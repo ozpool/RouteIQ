@@ -1,20 +1,18 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ApiError } from "./api/client";
 import { fetchHeatmap, planTrip } from "./api/trips";
 import type { Place, PlanTripRequest, TripPlan } from "./api/types";
-import { hoursBetween, nextCheckpoint } from "./domain/playback";
-import { truckStateAt } from "./domain/truckPosition";
-import { HeatmapControl, heatmapStart } from "./features/heatmap/HeatmapControl";
+import { HeatmapControl } from "./features/heatmap/HeatmapControl";
+import { usePlayback } from "./features/heatmap/usePlayback";
 import { routeLine, thinLine } from "./features/map/geojson";
 import { TripMap } from "./features/map/TripMap";
 import { RouteList } from "./features/routes/RouteList";
 import { TripForm } from "./features/trip-form/TripForm";
+import { useResizablePanel } from "./hooks/useResizablePanel";
 
 // The heatmap endpoint accepts up to 5000 points per line; the corridor grid is far coarser.
 const HEATMAP_LINE_POINTS = 1500;
-// Long enough to read each checkpoint's popup as the truck reaches it.
-const PLAYBACK_STEP_MS = 1100;
 
 interface PlannedTrip {
   id: number;
@@ -31,24 +29,12 @@ export function App() {
   const [destination, setDestination] = useState<Place | null>(null);
   const [trip, setTrip] = useState<PlannedTrip | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
-  const [expandedRouteIds, setExpandedRouteIds] = useState<ReadonlySet<string>>(new Set());
   const [activeCheckpoint, setActiveCheckpoint] = useState<number | null>(null);
-  const [offsetHours, setOffsetHours] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  // Whether the selected route's card shows its checkpoint table; only that card can be open.
+  const [isRouteOpen, setRouteOpen] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const tripCounter = useRef(0);
-
-  const planning = useMutation({
-    mutationFn: (request: PlanTripRequest) => planTrip(request),
-    onSuccess: (plan, request) => {
-      setTrip({ id: ++tripCounter.current, request, plan });
-      setSelectedRouteId(plan.recommendation.route_id);
-      setExpandedRouteIds(new Set([plan.recommendation.route_id]));
-      setActiveCheckpoint(null);
-      setOffsetHours(0);
-      setIsPlaying(false);
-    },
-  });
+  const panel = useResizablePanel();
 
   const heatmapQuery = useQuery({
     queryKey: ["heatmap", trip?.id],
@@ -70,94 +56,68 @@ export function App() {
   const plan = trip?.plan;
   const heatmap = heatmapQuery.data;
   const selectedRoute = plan?.routes.find((route) => route.id === selectedRouteId);
-
-  const startMs = heatmap ? heatmapStart(heatmap).getTime() : null;
-  const maxOffsetHours = heatmap ? heatmap.hours - 1 : 48;
-  const heatmapHour = Math.min(maxOffsetHours, Math.floor(offsetHours + 1e-9));
-  const timeAt = (hours: number) => new Date((startMs ?? 0) + hours * 3_600_000);
-
-  const truck = useMemo(
-    () =>
-      selectedRoute && startMs !== null
-        ? truckStateAt(selectedRoute, new Date(startMs + offsetHours * 3_600_000))
-        : null,
-    [selectedRoute, startMs, offsetHours],
-  );
-
-  const jumpToCheckpoint = useCallback(
-    (index: number) => {
-      const checkpoint = selectedRoute?.checkpoints[index];
-      if (!checkpoint || startMs === null) return;
-      const hours = hoursBetween(new Date(startMs), new Date(checkpoint.eta));
-      setOffsetHours(Math.min(maxOffsetHours, hours));
-      setActiveCheckpoint(index);
-    },
-    [selectedRoute, startMs, maxOffsetHours],
-  );
-
-  // Playback: advance to the next checkpoint, one at a time, and stop when the truck arrives.
-  useEffect(() => {
-    if (!isPlaying || !selectedRoute || startMs === null) return;
-    const timer = window.setTimeout(() => {
-      const now = new Date(startMs + offsetHours * 3_600_000);
-      const windowEnd = new Date(startMs + maxOffsetHours * 3_600_000);
-      const next = nextCheckpoint(selectedRoute, now, windowEnd);
-      if (next) jumpToCheckpoint(next.index);
-      else setIsPlaying(false);
-    }, PLAYBACK_STEP_MS);
-    return () => window.clearTimeout(timer);
-  }, [isPlaying, selectedRoute, startMs, offsetHours, maxOffsetHours, jumpToCheckpoint]);
-
-  const togglePlay = () => {
-    if (isPlaying) return setIsPlaying(false);
-    if (!selectedRoute || startMs === null) return;
-    // Finished (or past the forecast window): replay from the first checkpoint.
-    if (!nextCheckpoint(selectedRoute, timeAt(offsetHours), timeAt(maxOffsetHours))) {
-      jumpToCheckpoint(0);
-    }
-    setIsPlaying(true);
-  };
-
-  const lastCheckpoint = selectedRoute?.checkpoints[selectedRoute.checkpoints.length - 1];
-  const playbackNote =
-    lastCheckpoint &&
-    startMs !== null &&
-    Date.parse(lastCheckpoint.eta) > timeAt(maxOffsetHours).getTime() &&
-    truck?.status !== "waiting"
-      ? "Trip runs past the 48 h forecast window"
-      : null;
-
-  const selectRoute = useCallback((routeId: string) => {
-    setSelectedRouteId(routeId);
-    setActiveCheckpoint(null);
-    setIsPlaying(false);
+  // Reaching a checkpoint (map click, ⏮ / ⏭, playback) reopens the card so its row is visible.
+  const showCheckpoint = useCallback((index: number) => {
+    setActiveCheckpoint(index);
+    setRouteOpen(true);
   }, []);
+  const playback = usePlayback(selectedRoute, heatmap, showCheckpoint);
+  const { pause, reset } = playback;
 
-  const toggleRoute = useCallback(
-    (routeId: string) => {
-      const isOpen = expandedRouteIds.has(routeId);
-      setExpandedRouteIds((open) => {
-        const next = new Set(open);
-        if (isOpen) next.delete(routeId);
-        else next.add(routeId);
-        return next;
-      });
-      if (!isOpen) selectRoute(routeId);
+  const planning = useMutation({
+    mutationFn: (request: PlanTripRequest) => planTrip(request),
+    onSuccess: (plan, request) => {
+      setTrip({ id: ++tripCounter.current, request, plan });
+      setSelectedRouteId(plan.recommendation.route_id);
+      setActiveCheckpoint(null);
+      setRouteOpen(true);
+      reset();
     },
-    [expandedRouteIds, selectRoute],
+  });
+
+  const selectRoute = useCallback(
+    (routeId: string) => {
+      setSelectedRouteId(routeId);
+      setActiveCheckpoint(null);
+      setRouteOpen(true);
+      pause();
+    },
+    [pause],
+  );
+
+  // A card click: another route is selected and opened; the selected route's card opens or closes.
+  const toggleRouteCard = useCallback(
+    (routeId: string) => {
+      if (routeId === selectedRouteId) setRouteOpen((open) => !open);
+      else selectRoute(routeId);
+    },
+    [selectedRouteId, selectRoute],
   );
 
   const selectCheckpoint = useCallback(
     (routeId: string, index: number) => {
       if (routeId !== selectedRouteId) selectRoute(routeId);
-      setIsPlaying(false);
+      pause();
       setActiveCheckpoint(index);
     },
-    [selectedRouteId, selectRoute],
+    [selectedRouteId, selectRoute, pause],
+  );
+
+  const selectMapCheckpoint = useCallback(
+    (index: number | null) => {
+      pause();
+      if (index === null) setActiveCheckpoint(null);
+      else showCheckpoint(index);
+    },
+    [pause, showCheckpoint],
   );
 
   return (
-    <div className="app">
+    <div
+      ref={panel.containerRef}
+      className={`app${panel.isResizing ? " is-resizing" : ""}`}
+      style={panel.containerStyle}
+    >
       <aside className="panel">
         <header className="panel__header">
           <img src="/favicon.svg" alt="" width={28} height={28} />
@@ -169,26 +129,36 @@ export function App() {
 
         <TripForm
           isSubmitting={planning.isPending}
-          onSubmit={(request) => planning.mutate(request)}
+          onSubmit={planning.mutate}
           origin={origin}
           destination={destination}
           onOriginChange={setOrigin}
           onDestinationChange={setDestination}
         />
 
-        {planning.isError && (
-          <p className="alert alert--error" role="alert">
-            {errorMessage(planning.error)}
+        {planning.isPending && (
+          <p className="status" role="status">
+            Finding three routes and checking the forecast at every checkpoint. Long trips can take
+            up to 20 seconds.
           </p>
         )}
 
-        {plan ? (
+        {planning.isError && (
+          <p className="alert alert--error" role="alert">
+            {errorMessage(planning.error)}
+            {plan && " The routes below are from your previous search."}
+          </p>
+        )}
+
+        {trip ? (
           <RouteList
-            plan={plan}
+            key={trip.id}
+            plan={trip.plan}
+            loadWeightLb={trip.request.load_weight_lb}
             selectedRouteId={selectedRouteId}
-            expandedRouteIds={expandedRouteIds}
             onSelectRoute={selectRoute}
-            onToggleRoute={toggleRoute}
+            isSelectedOpen={isRouteOpen}
+            onToggleRoute={toggleRouteCard}
             activeCheckpoint={activeCheckpoint}
             onSelectCheckpoint={selectCheckpoint}
           />
@@ -202,6 +172,8 @@ export function App() {
         )}
       </aside>
 
+      <div className="panel-resizer" {...panel.handleProps} />
+
       <main className="map-area">
         <TripMap
           plan={plan}
@@ -210,33 +182,21 @@ export function App() {
           selectedRouteId={selectedRouteId}
           onSelectRoute={selectRoute}
           activeCheckpoint={activeCheckpoint}
-          onSelectCheckpoint={(index) => {
-            setIsPlaying(false);
-            setActiveCheckpoint(index);
-          }}
+          onSelectCheckpoint={selectMapCheckpoint}
           heatmap={heatmap}
-          heatmapHour={heatmapHour}
+          heatmapHour={playback.heatmapHour}
           showHeatmap={showHeatmap}
-          truck={truck}
+          truck={playback.truck}
         />
         {planning.isPending && <div className="map-area__loading" aria-hidden="true" />}
         <HeatmapControl
           heatmap={heatmap}
+          route={selectedRoute}
           isLoading={heatmapQuery.isFetching}
           error={heatmapQuery.isError ? errorMessage(heatmapQuery.error) : null}
-          offsetHours={offsetHours}
-          maxOffsetHours={maxOffsetHours}
-          onOffsetChange={(hours) => {
-            setIsPlaying(false);
-            setOffsetHours(hours);
-          }}
+          playback={playback}
           isVisible={showHeatmap}
           onVisibleChange={setShowHeatmap}
-          truck={truck}
-          isPlaying={isPlaying}
-          canPlay={Boolean(selectedRoute && heatmap)}
-          onTogglePlay={togglePlay}
-          playbackNote={playbackNote}
         />
       </main>
     </div>

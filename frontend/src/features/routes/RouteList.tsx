@@ -1,22 +1,26 @@
+import { memo } from "react";
 import type { TripPlan } from "../../api/types";
+import { loadEffect } from "../../domain/risk";
 import { RouteCard } from "./RouteCard";
 import { RouteComparison } from "./RouteComparison";
 
 interface RouteListProps {
   plan: TripPlan;
+  loadWeightLb: number;
   selectedRouteId: string | null;
-  expandedRouteIds: ReadonlySet<string>;
   onSelectRoute: (routeId: string) => void;
+  isSelectedOpen: boolean;
   onToggleRoute: (routeId: string) => void;
   activeCheckpoint: number | null;
   onSelectCheckpoint: (routeId: string, index: number) => void;
 }
 
-export function RouteList({
+export const RouteList = memo(function RouteList({
   plan,
+  loadWeightLb,
   selectedRouteId,
-  expandedRouteIds,
   onSelectRoute,
+  isSelectedOpen,
   onToggleRoute,
   activeCheckpoint,
   onSelectCheckpoint,
@@ -32,6 +36,7 @@ export function RouteList({
         <p className="recommendation__eyebrow">Recommended</p>
         <p className="recommendation__title">{best?.label}</p>
         <p className="recommendation__reason">{recommendation.reason}</p>
+        {best && <p className="recommendation__load">{loadEffect(best, loadWeightLb)}</p>}
         {recommendation.warnings.map((warning) => (
           <p key={warning} className="alert alert--warning">
             {warning}
@@ -51,7 +56,7 @@ export function RouteList({
           rank={i + 1}
           isRecommended={route.id === recommendation.route_id}
           isSelected={route.id === selectedRouteId}
-          isExpanded={expandedRouteIds.has(route.id)}
+          isOpen={route.id === selectedRouteId && isSelectedOpen}
           onToggle={() => onToggleRoute(route.id)}
           activeCheckpoint={route.id === selectedRouteId ? activeCheckpoint : null}
           onSelectCheckpoint={(index) => onSelectCheckpoint(route.id, index)}
@@ -59,4 +64,4 @@ export function RouteList({
       ))}
     </section>
   );
-}
+});

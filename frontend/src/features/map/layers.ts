@@ -19,11 +19,15 @@ export const LAYER_IDS = {
   heatmap: "heatmap-cells",
   routeHit: "route-hit",
   otherRoutes: "route-others",
+  recommendedRoute: "route-recommended",
   selectedCasing: "route-selected-casing",
   selectedRisk: "route-selected-risk",
   checkpoints: "checkpoints",
   endpoints: "endpoints",
 } as const;
+
+/** Cell fill opacity by risk score. Low cells stay faint so the corridor reads as context. */
+export const HEATMAP_OPACITY: readonly number[] = [0.1, 0.32, 0.45, 0.45, 0.45];
 
 export function heatmapFillLayer(hour: number): Layer<FillLayerSpecification> {
   const score: ExpressionSpecification = ["get", `h${hour}`];
@@ -37,8 +41,12 @@ export function heatmapFillLayer(hour: number): Layer<FillLayerSpecification> {
         ...RISK_LEVELS.flatMap((level, i) => [i, RISK_COLOR[level]]),
         RISK_COLOR.low,
       ] as unknown as ExpressionSpecification,
-      // Low cells stay faint so the corridor reads as context, not as a warning.
-      "fill-opacity": ["match", score, 0, 0.1, 1, 0.32, 0.45] as unknown as ExpressionSpecification,
+      "fill-opacity": [
+        "match",
+        score,
+        ...HEATMAP_OPACITY.flatMap((opacity, i) => [i, opacity]),
+        HEATMAP_OPACITY[0],
+      ] as unknown as ExpressionSpecification,
       "fill-antialias": false,
     },
   };
@@ -48,13 +56,28 @@ export function otherRoutesLayer(selectedId: string): Layer<LineLayerSpecificati
   return {
     id: LAYER_IDS.otherRoutes,
     type: "line",
-    filter: ["!=", ["get", "routeId"], selectedId],
+    filter: ["all", ["!=", ["get", "routeId"], selectedId], ["!", ["get", "recommended"]]],
     layout: { "line-join": "round", "line-cap": "round" },
     paint: {
       "line-color": "#5b6b78",
       "line-opacity": 0.55,
       "line-width": ["interpolate", ["linear"], ["zoom"], 4, 2.5, 10, 5],
       "line-dasharray": [1.5, 1.2],
+    },
+  };
+}
+
+/** The recommended route stays marked on the map while the driver inspects another one. */
+export function recommendedRouteLayer(selectedId: string): Layer<LineLayerSpecification> {
+  return {
+    id: LAYER_IDS.recommendedRoute,
+    type: "line",
+    filter: ["all", ["!=", ["get", "routeId"], selectedId], ["get", "recommended"]],
+    layout: { "line-join": "round", "line-cap": "round" },
+    paint: {
+      "line-color": "#0b6b4f",
+      "line-opacity": 0.8,
+      "line-width": ["interpolate", ["linear"], ["zoom"], 4, 3, 10, 6],
     },
   };
 }

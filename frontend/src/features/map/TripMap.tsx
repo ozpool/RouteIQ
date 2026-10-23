@@ -29,6 +29,7 @@ import {
   endpointsLayer,
   heatmapFillLayer,
   otherRoutesLayer,
+  recommendedRouteLayer,
   routeHitLayer,
   selectedCasingLayer,
   selectedRiskLayer,
@@ -86,6 +87,7 @@ export function TripMap({
   const heatmapCells = useMemo(() => (heatmap ? heatmapCellsCollection(heatmap) : null), [heatmap]);
   const heatmapLayer = useMemo(() => heatmapFillLayer(heatmapHour), [heatmapHour]);
   const othersLayer = useMemo(() => otherRoutesLayer(selectedRouteId ?? ""), [selectedRouteId]);
+  const recommendedLayer = useMemo(() => recommendedRouteLayer(selectedRouteId ?? ""), [selectedRouteId]);
 
   useEffect(() => {
     if (!plan) return;
@@ -156,7 +158,7 @@ export function TripMap({
         <Source id="heatmap" type="geojson" data={heatmapCells}>
           <Layer
             {...heatmapLayer}
-            beforeId={labelLayerId}
+            beforeId={routeLines ? LAYER_IDS.otherRoutes : labelLayerId}
             layout={{ visibility: showHeatmap ? "visible" : "none" }}
           />
         </Source>
@@ -165,6 +167,7 @@ export function TripMap({
       {routeLines && (
         <Source id="routes" type="geojson" data={routeLines}>
           <Layer {...othersLayer} beforeId={labelLayerId} />
+          <Layer {...recommendedLayer} beforeId={labelLayerId} />
           <Layer {...routeHitLayer} />
         </Source>
       )}
