@@ -15,6 +15,13 @@ inventing a third.
 
 ## Walkthrough
 
+Seattle, WA → Minneapolis, MN with a 42,000 lb load: three routes, the forecast at every
+checkpoint, the corridor heatmap and trip playback.
+
+![RouteIQ planning Seattle to Minneapolis](docs/demo.gif)
+
+The same clip in full quality: [`docs/demo.mp4`](docs/demo.mp4).
+
 A short video walkthrough of the app and the main design decisions:
 
 Video link: _to be added_
@@ -47,12 +54,12 @@ make dev-api    # Django on http://127.0.0.1:8000
 make dev-web    # Vite on http://localhost:5173 (planner at /app/), proxying /api to Django
 ```
 
-Without make:
+Without make, from the repository root, in two terminals:
 
 ```bash
 cp .env.example .env
-cd backend && uv sync && uv run python manage.py runserver 127.0.0.1:8000
-cd frontend && pnpm install && pnpm dev
+(cd backend && uv sync && uv run python manage.py runserver 127.0.0.1:8000)   # terminal 1
+(cd frontend && pnpm install && pnpm dev)                                     # terminal 2
 ```
 
 To run the production image locally with Redis:
@@ -66,8 +73,19 @@ docker compose up --build     # http://localhost:8080
 
 All settings live in one `.env` file at the repository root and are documented in
 [`.env.example`](.env.example); no key is needed for local development. In production, set
-`APP_ENV=production` and a `SECRET_KEY`. The app refuses to start with `DEBUG` on or with
-`ALLOWED_HOSTS=*`.
+`APP_ENV=production` and a `SECRET_KEY`. The app refuses to start in production with `DEBUG` on,
+with an empty or default `SECRET_KEY`, or with `ALLOWED_HOSTS` empty or set to `*`.
+
+## Tests and CI
+
+```bash
+make test       # pytest (backend) and vitest (frontend)
+make lint       # ruff check, ruff format --check and tsc
+make build      # production frontend bundle
+```
+
+GitHub Actions runs ruff, pytest, the TypeScript check, vitest and the frontend build on every
+pull request and on pushes to `main` and `develop`, then builds the Docker image.
 
 ## How it works
 
@@ -75,11 +93,13 @@ All settings live in one `.env` file at the repository root and are documented i
    the API adds detours through points to either side of the midpoint. Routes that overlap an
    accepted one by 80% or more, or are over 1.75 times the fastest, are dropped.
 2. Truck ETA. Each road segment takes the longer of the router's time and its distance at the
-   truck speed cap.
+   truck speed cap (65 mph by default, `TRUCK_MAX_SPEED_MPH`).
 3. Checkpoints. Placed at mile 0, then every 10, 25 or 50 miles, plus the destination.
-4. Weather. One batched Open-Meteo request covers every checkpoint of every route. Rain and snow
-   come from the hour the truck is driving through; wind is interpolated between hours. Lookups
-   share a grid of about 12 miles and are cached.
+4. Weather. The forecast for every checkpoint of every route is fetched in one batch, sent to
+   Open-Meteo as requests of up to 100 points. Rain and snow come from the hour the truck is
+   driving through; wind is interpolated between hours. Lookups snap to a shared grid of 0.2°
+   (about 12 miles), made coarser only when a trip would need more than 250 lookups, and are
+   cached per point and day.
 5. Risk. Each checkpoint gets a level from the rules below. Its level covers the road from
    halfway back to the previous checkpoint to halfway to the next.
 6. Recommendation. Routes are ranked as described below.
@@ -103,8 +123,8 @@ Load rules apply to wind only and can only raise its level:
 | Wind | Load | Result |
 |---|---|---|
 | ≥ 55 mph | any | No Travel |
-| 45 to 54 mph | over 30,000 lb | No Travel |
-| 35 to 44 mph | over 40,000 lb | Severe |
+| 45 to < 55 mph | over 30,000 lb | No Travel |
+| 35 to < 45 mph | over 40,000 lb | Severe |
 
 A checkpoint's level is the worst of wind (after the load rules), rain and snow. Wind is the
 sustained 10 m wind; gusts are shown but not scored. Rain is Open-Meteo's rain plus showers, and
@@ -119,10 +139,12 @@ Routes are compared on the following, in order, and the first difference decides
 3. Fewest High miles
 4. Least weather exposure, in risk-miles (each mile multiplied by its level, from Moderate = 1 to
    No Travel = 4)
-5. Shortest drive time
+5. Shortest travel time
 
 The response names the deciding criterion, for example "Fewest Severe miles: 0.0 mi vs 37.5 mi
-on Route B", and adds a warning when even the best route crosses Severe or No Travel conditions.
+on Route B." When routes tie on earlier criteria, the reason starts with them, as in "Tied on No
+Travel miles, Severe miles. …". A warning is added when even the best route crosses Severe or
+No Travel conditions.
 
 Two choices go beyond the brief's wording. No Travel miles are ranked before Severe miles,
 because a No Travel stretch is strictly worse. The fourth step compares total risk-miles rather
@@ -137,6 +159,9 @@ extra Low miles and win despite being hours slower. Average risk is still report
 | GET | `/api/geocode?q=&limit=` | Place search (`q` 2–120 characters, `limit` up to 8) | 60/min |
 | POST | `/api/trips/plan` | Routes, checkpoints, risk and recommendation | 20/min |
 | POST | `/api/trips/heatmap` | Corridor cells with 49 hourly risk scores | 20/min |
+
+Each endpoint has its own counter per IP, kept in the Django cache; without Redis, each
+gunicorn worker counts separately.
 
 Request and response types are defined in
 [`frontend/src/api/types.ts`](frontend/src/api/types.ts).
@@ -155,7 +180,8 @@ curl -X POST https://routeiq-fzde.onrender.com/api/trips/plan \
   }'
 ```
 
-`departure_time` must include a UTC offset and fall between one hour ago and seven days ahead.
+`departure_time` is ISO 8601 (read as UTC when it has no offset) and must fall between one hour
+ago and seven days ahead.
 `load_weight_lb` must be between 1 and 80,000, `checkpoint_interval_mi` must be 10, 25 or 50,
 and the origin and destination must be at least one mile apart.
 
@@ -168,7 +194,7 @@ An excerpt of the response:
     "distance_mi": 966.5,
     "duration_s": 61560,
     "risk": {"exposure": 25.0, "max_level": "moderate"},
-    "checkpoints": [{"mile": 25, "eta": "2026-10-24T14:27:00Z", "risk": {"level": "moderate", "load_raised": false}}]
+    "checkpoints": [{"mile": 25.0, "eta": "2026-10-24T14:27:13.846154Z", "risk": {"level": "moderate", "load_raised": false}}]
   }],
   "recommendation": {"route_id": "a", "reason": "Least weather exposure: 25.0 risk-mi vs 50.0 risk-mi on Route C."}
 }
@@ -181,8 +207,11 @@ provider is down or out of quota.
 
 ## Health check
 
-- `GET or HEAD /api/health` returns the status of each integrated service (OSRM, Open-Meteo, Photon and
-the cache). 
+`GET` or `HEAD /api/health` returns the status of each integrated service: OSRM, Open-Meteo,
+Photon and the cache. It never calls a provider; each status comes from that provider's last
+real request. It always answers 200, with `"status": "degraded"` in the body when a service is
+failing, so monitors should alert on the body rather than the status code. `HEAD` returns the
+same response without a body.
 
 ## Architecture diagram
 
@@ -196,11 +225,13 @@ limits. The editable source is
 ## Project structure
 
 ```
-docs/              architecture diagram (PNG and editable Excalidraw file)
+.github/workflows/ CI: lint, tests, frontend build, Docker build
+docs/              architecture diagram (PNG and editable Excalidraw file), demo clip
 backend/
   config/          settings and typed environment
   routeiq/
-    domain/        risk rules, ETA, checkpoints, forecast lookup, scoring, ranking (pure Python)
+    domain/        risk rules, ETA, checkpoints, forecast lookup, scoring, ranking, geometry,
+                   weather grid, corridor cells, route overlap (pure Python)
     ports.py       interfaces for routing, weather and geocoding providers
     adapters/      OSRM, Open-Meteo, Photon, caching, HTTP client, provider status
     services/      route options, trip planner, corridor heatmap
@@ -209,6 +240,7 @@ backend/
 frontend/
   index.html       landing page
   app/index.html   planner page
+  public/          favicons
 frontend/src/
   api/             HTTP client and API types
   config/          typed environment
