@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime, timedelta
 
-from routeiq.domain.forecast import HourlyForecast
 from routeiq.domain.geo import METERS_PER_MILE, LatLon
 from routeiq.domain.models import (
     Checkpoint,
@@ -33,10 +32,6 @@ def straight_candidate(
         segment_durations_s=(seg_s,) * segments,
         summary=summary,
     )
-
-
-def flat_forecast(weather: Weather = CALM, hours: int = 72, start: datetime = DEPARTURE):
-    return HourlyForecast(start=start, hours=(weather,) * hours)
 
 
 def checkpoint(index: int, mile: float, level_weather: Weather, path_index: int = 0) -> Checkpoint:
