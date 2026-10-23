@@ -11,8 +11,8 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: ALLOWED_HOSTS
-        value: routeiq.onrender.com
+        value: routeiq-fzde.onrender.com
       - key: CSRF_TRUSTED_ORIGINS
-        value: https://routeiq.onrender.com
+        value: https://routeiq-fzde.onrender.com
       - key: HTTP_USER_AGENT
-        value: RouteIQ/1.0 (+https://routeiq.onrender.com)
+        value: RouteIQ/1.0 (+https://routeiq-fzde.onrender.com)
