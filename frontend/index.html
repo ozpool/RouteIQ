@@ -5,10 +5,112 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Weather-aware truck routing: compare routes by forecast risk at your ETA." />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>RouteIQ</title>
+    <style>
+      /* The planner's own palette (frontend/src/styles/app.css). */
+      :root {
+        --ink: #0f2f3a;
+        --accent: #127a6a;
+        --accent-hover: #0e6658;
+        --surface-alt: #f4f7f8;
+        --muted: #6b7f89;
+        color-scheme: light;
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 32px 16px;
+        background: var(--surface-alt);
+        color: var(--ink);
+      }
+
+      main {
+        width: min(560px, 100%);
+        text-align: center;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 28px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: clamp(32px, 6vw, 44px);
+        font-weight: 700;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        text-wrap: balance;
+      }
+
+      .lede {
+        margin: 0 auto 32px;
+        max-width: 42ch;
+        font-size: 17px;
+        line-height: 1.55;
+        color: var(--muted);
+        text-wrap: pretty;
+      }
+
+      .open {
+        display: inline-block;
+        padding: 13px 30px;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .open:hover {
+        background: var(--accent-hover);
+      }
+
+      a:focus-visible {
+        outline: 3px solid var(--ink);
+        outline-offset: 3px;
+      }
+
+      .status {
+        display: block;
+        margin-top: 40px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .status:hover {
+        color: var(--ink);
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <main>
+      <p class="brand">
+        <img src="/favicon.svg" alt="" width="32" height="32" />
+        RouteIQ
+      </p>
+      <h1>Pick the safest truck route</h1>
+      <p class="lede">
+        Three routes compared on the weather the truck will meet at each checkpoint, scored for
+        wind, rain, snow and load weight.
+      </p>
+      <a class="open" href="/app/">Open the planner</a>
+      <a class="status" href="https://stats.uptimerobot.com/T4N5L51NHB">System status</a>
+    </main>
   </body>
 </html>

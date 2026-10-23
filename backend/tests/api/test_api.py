@@ -198,6 +198,28 @@ def test_geocode(api: APIClient) -> None:
     assert api.get("/api/geocode", {"q": "D"}).status_code == 400
 
 
+def heatmap_body():
+    return {
+        "lines": [[[-100.0, 40.0], [-97.5, 40.0]]],
+        "departure_time": (timezone.now() + timedelta(hours=2)).isoformat(),
+        "load_weight_lb": 30000,
+    }
+
+
+def test_geocode_calls_do_not_use_up_the_planning_limit(api: APIClient) -> None:
+    # Typing in the place fields easily sends 20+ geocode requests before the first plan.
+    for _ in range(25):
+        assert api.get("/api/geocode", {"q": "Dallas"}).status_code == 200
+    assert api.post("/api/trips/plan", plan_body(), format="json").status_code == 200
+
+
+def test_plan_and_heatmap_have_their_own_limits(api: APIClient) -> None:
+    for _ in range(20):
+        assert api.post("/api/trips/plan", plan_body(), format="json").status_code == 200
+    assert api.post("/api/trips/plan", plan_body(), format="json").status_code == 429
+    assert api.post("/api/trips/heatmap", heatmap_body(), format="json").status_code == 200
+
+
 def test_rate_limit_message_passes_provider_reason(monkeypatch) -> None:
     class Limited:
         def route(self, waypoints, alternatives):

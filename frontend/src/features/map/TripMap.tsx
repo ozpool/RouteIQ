@@ -37,6 +37,9 @@ import {
 
 const INITIAL_VIEW = { longitude: -96.5, latitude: 38.5, zoom: 3.6 };
 const INTERACTIVE_LAYERS = [LAYER_IDS.checkpoints, LAYER_IDS.routeHit];
+// Open-Meteo's free API is CC-BY 4.0: the forecast must be credited wherever it is shown.
+const WEATHER_ATTRIBUTION =
+  '<a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a>';
 
 interface TripMapProps {
   plan: TripPlan | undefined;
@@ -152,7 +155,11 @@ export function TripMap({
       style={{ position: "absolute", inset: 0 }}
     >
       <NavigationControl position="top-right" showCompass={false} />
-      <AttributionControl compact position="top-left" />
+      <AttributionControl
+        compact
+        position="top-left"
+        customAttribution={WEATHER_ATTRIBUTION}
+      />
 
       {heatmapCells && (
         <Source id="heatmap" type="geojson" data={heatmapCells}>
