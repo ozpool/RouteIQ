@@ -82,6 +82,14 @@ def test_heavy_load_in_high_wind_becomes_severe_with_reason() -> None:
     assert result.level == S
     assert result.wind == S
     assert any("Load 42,000 lb" in reason for reason in result.reasons)
+    assert result.load_raised
+
+
+def test_load_raised_is_false_when_the_load_changes_nothing() -> None:
+    assert not assess(calm(wind_mph=38), load_weight_lb=40_000).load_raised
+    assert not assess(calm(wind_mph=20), load_weight_lb=80_000).load_raised
+    # 55 mph is No Travel for any load, so the load did not raise it.
+    assert not assess(calm(wind_mph=56), load_weight_lb=80_000).load_raised
 
 
 def test_worst_condition_wins() -> None:

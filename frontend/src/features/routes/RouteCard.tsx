@@ -1,5 +1,7 @@
+import { useEffect, useRef } from "react";
 import type { Route } from "../../api/types";
-import { formatClock, formatDuration, formatMiles } from "../../domain/format";
+import { formatClock, formatDuration, formatMiles, localZoneName } from "../../domain/format";
+import { RISK_LABEL, elevatedMiles } from "../../domain/risk";
 import { CheckpointList } from "./CheckpointList";
 import { RiskBadge } from "./RiskBadge";
 import { RiskBar } from "./RiskBar";
@@ -9,7 +11,7 @@ interface RouteCardProps {
   rank: number;
   isRecommended: boolean;
   isSelected: boolean;
-  isExpanded: boolean;
+  isOpen: boolean;
   onToggle: () => void;
   activeCheckpoint: number | null;
   onSelectCheckpoint: (index: number) => void;
@@ -20,20 +22,30 @@ export function RouteCard({
   rank,
   isRecommended,
   isSelected,
-  isExpanded,
+  isOpen,
   onToggle,
   activeCheckpoint,
   onSelectCheckpoint,
 }: RouteCardProps) {
-  const miles = route.risk.miles_by_level;
+  const elevated = elevatedMiles(route.risk.miles_by_level);
+  const cardRef = useRef<HTMLElement>(null);
+  const wasSelected = useRef(isSelected);
+
+  // Newly selected (from the map, the table or this card): bring it into view. A card that is
+  // selected from its first render is left alone, so a new plan keeps the recommendation on top.
+  useEffect(() => {
+    if (isSelected && !wasSelected.current) cardRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    wasSelected.current = isSelected;
+  }, [isSelected]);
+
   return (
-    <article className={`route-card${isSelected ? " is-selected" : ""}${isExpanded ? " is-expanded" : ""}`}>
+    <article ref={cardRef} className={`route-card${isSelected ? " is-selected" : ""}`}>
       <button
         type="button"
         className="route-card__summary"
         onClick={onToggle}
-        aria-expanded={isExpanded}
-        title={isExpanded ? "Hide checkpoints" : "Show checkpoints and highlight on map"}
+        aria-expanded={isOpen}
+        title={isOpen ? "Hide checkpoints" : isSelected ? "Show checkpoints" : "Show this route on the map"}
       >
         <div className="route-card__title">
           <span className="route-card__rank">#{rank}</span>
@@ -43,7 +55,7 @@ export function RouteCard({
           <span className="route-card__max">
             <RiskBadge level={route.risk.max_level} />
             <span className="route-card__chevron" aria-hidden="true">
-              {isExpanded ? "▾" : "▸"}
+              {isOpen ? "▾" : "▸"}
             </span>
           </span>
         </div>
@@ -58,7 +70,7 @@ export function RouteCard({
             <dd>{formatDuration(route.duration_s)}</dd>
           </div>
           <div>
-            <dt>Arrive</dt>
+            <dt>Arrive ({localZoneName()})</dt>
             <dd>{formatClock(route.arrival)}</dd>
           </div>
           <div>
@@ -68,11 +80,17 @@ export function RouteCard({
         </dl>
         <RiskBar route={route} />
         <p className="route-card__miles">
-          {miles.no_travel > 0 && <span className="danger">{formatMiles(miles.no_travel)} No Travel · </span>}
-          <span>{formatMiles(miles.severe)} Severe</span> · <span>{formatMiles(miles.high)} High</span>
+          {elevated.length === 0
+            ? `All ${formatMiles(route.distance_mi)} Low`
+            : elevated.map(({ level, miles }, i) => (
+                <span key={level} className={level === "no_travel" ? "danger" : undefined}>
+                  {i > 0 && " · "}
+                  {formatMiles(miles)} {RISK_LABEL[level]}
+                </span>
+              ))}
         </p>
       </button>
-      {isExpanded && (
+      {isOpen && (
         <CheckpointList
           checkpoints={route.checkpoints}
           activeIndex={activeCheckpoint}

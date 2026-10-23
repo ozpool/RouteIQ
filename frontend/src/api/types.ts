@@ -24,6 +24,8 @@ export interface CheckpointRisk {
   rain: RiskKey;
   snow: RiskKey;
   reasons: string[];
+  /** The load rules raised this checkpoint's wind level. */
+  load_raised: boolean;
 }
 
 export interface Checkpoint {
@@ -53,6 +55,8 @@ export interface Route {
   risk: {
     miles_by_level: Record<RiskKey, number>;
     average: number;
+    /** Risk-miles: each mile times its level (Moderate 1 … No Travel 4). The ranking compares it. */
+    exposure: number;
     max_level: RiskKey;
   };
   checkpoints: Checkpoint[];

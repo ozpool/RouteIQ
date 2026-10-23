@@ -36,6 +36,8 @@ class RiskAssessment:
     rain: RiskLevel
     snow: RiskLevel
     reasons: tuple[str, ...]
+    # True when the load rules raised the wind level above what the wind alone gives.
+    load_raised: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +98,11 @@ class RiskSummary:
     average_risk: float
     max_level: RiskLevel
     segments: tuple[RiskSegment, ...]
+
+    @property
+    def exposure(self) -> float:
+        """Risk-miles: every mile times its level (Moderate 1 … No Travel 4)."""
+        return sum(int(level) * miles for level, miles in self.miles_by_level.items())
 
 
 @dataclass(frozen=True, slots=True)

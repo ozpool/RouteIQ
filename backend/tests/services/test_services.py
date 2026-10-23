@@ -88,7 +88,7 @@ class TestTripPlanner:
         assert stormy.risk.max_level == RiskLevel.HIGH
 
     def test_checkpoints_use_eta_weather(self) -> None:
-        # Storm arrives one hour after departure everywhere.
+        # Storm arrives two hours after departure everywhere.
         weather = FakeWeather(lambda p, t: STORM if t >= DEPARTURE + timedelta(hours=2) else CALM)
         route = self.plan(weather).routes[0]
         first, last = route.checkpoints[0], route.checkpoints[-1]

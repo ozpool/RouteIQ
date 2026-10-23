@@ -66,7 +66,7 @@ def assess(weather: Weather, load_weight_lb: float) -> RiskAssessment:
 
     reasons: list[str] = []
     if base_wind > RiskLevel.LOW:
-        reasons.append(f"Wind {weather.wind_mph:.0f} mph → {base_wind.label}")
+        reasons.append(f"Wind {weather.wind_mph:.1f} mph → {base_wind.label}")
     if wind != base_wind:
         reasons.append(
             f"Load {load_weight_lb:,.0f} lb raises wind risk {base_wind.label} → {wind.label}"
@@ -82,4 +82,5 @@ def assess(weather: Weather, load_weight_lb: float) -> RiskAssessment:
         rain=rain,
         snow=snow,
         reasons=tuple(reasons),
+        load_raised=wind != base_wind,
     )

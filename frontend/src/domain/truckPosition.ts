@@ -2,7 +2,7 @@ import type { Coordinate, Route } from "../api/types";
 
 const EARTH_RADIUS_MI = 3958.76;
 
-function distanceMiles([lon1, lat1]: Coordinate, [lon2, lat2]: Coordinate): number {
+export function distanceMiles([lon1, lat1]: Coordinate, [lon2, lat2]: Coordinate): number {
   const toRad = Math.PI / 180;
   const dLat = (lat2 - lat1) * toRad;
   const dLon = (lon2 - lon1) * toRad;
@@ -50,17 +50,18 @@ export function truckStateAt(route: Route, time: Date): TruckState | null {
   for (let i = 0; i < checkpoints.length - 1; i++) {
     const a = checkpoints[i];
     const b = checkpoints[i + 1];
-    const segment = segments[i];
-    if (!a || !b || !segment) continue;
+    if (!a || !b) continue;
     const start = Date.parse(a.eta);
     const end = Date.parse(b.eta);
     if (t <= end) {
       const fraction = end > start ? (t - start) / (end - start) : 0;
-      return {
-        status: "driving",
-        coordinate: pointAlong(segment.coordinates, fraction),
-        mile: a.mile + (b.mile - a.mile) * fraction,
-      };
+      const mile = a.mile + (b.mile - a.mile) * fraction;
+      // Risk segments split at the midpoints between checkpoints, so find the one by mile.
+      const segment = segments.find((s) => mile <= s.end_mile) ?? segments[segments.length - 1];
+      if (!segment) return null;
+      const span = segment.end_mile - segment.start_mile;
+      const along = span > 0 ? (mile - segment.start_mile) / span : 0;
+      return { status: "driving", coordinate: pointAlong(segment.coordinates, along), mile };
     }
   }
   return { status: "arrived", coordinate: last.coordinate };

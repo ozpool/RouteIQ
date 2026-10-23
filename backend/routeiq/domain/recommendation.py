@@ -2,6 +2,10 @@
 
 No Travel miles are ranked ahead of Severe miles: a No Travel stretch is strictly worse than
 a Severe one, and the brief's list starts at Severe only because it lists route preferences.
+
+The brief's "lowest average risk" step compares total risk-miles, not the per-mile average.
+A per-mile average lets a detour dilute the same bad miles with extra Low miles and win while
+being hours slower; totals keep that step consistent with the Severe and High mile counts.
 """
 
 from collections.abc import Callable, Sequence
@@ -37,10 +41,10 @@ CRITERIA: tuple[_Criterion, ...] = (
     _Criterion("Fewest Severe miles", "Severe miles", _miles_at(RiskLevel.SEVERE), _miles),
     _Criterion("Fewest High miles", "High miles", _miles_at(RiskLevel.HIGH), _miles),
     _Criterion(
-        "Lowest average risk",
-        "average risk",
-        lambda route: round(route.risk.average_risk, 2),
-        lambda value: f"{value:.2f}",
+        "Least weather exposure",
+        "weather exposure",
+        lambda route: round(route.risk.exposure, 1),
+        lambda value: f"{value:.1f} risk-mi",
     ),
     _Criterion(
         "Shortest travel time",

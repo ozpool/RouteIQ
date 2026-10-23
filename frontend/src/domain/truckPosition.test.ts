@@ -9,7 +9,7 @@ function checkpoint(index: number, mile: number, lon: number, eta: string): Chec
     coordinate: [lon, 40],
     eta,
     weather: { wind_mph: 5, gust_mph: null, rain_in_hr: 0, snow_in_hr: 0 },
-    risk: { level: "low", score: 0, wind: "low", rain: "low", snow: "low", reasons: [] },
+    risk: { level: "low", score: 0, wind: "low", rain: "low", snow: "low", reasons: [], load_raised: false },
   };
 }
 
@@ -24,6 +24,7 @@ const route: Route = {
   risk: {
     miles_by_level: { low: 100, moderate: 0, high: 0, severe: 0, no_travel: 0 },
     average: 0,
+    exposure: 0,
     max_level: "low",
   },
   checkpoints: [
@@ -31,9 +32,11 @@ const route: Route = {
     checkpoint(1, 50, -99, "2026-01-10T09:00:00Z"),
     checkpoint(2, 100, -98, "2026-01-10T10:00:00Z"),
   ],
+  // One segment per checkpoint, split at the midpoints between checkpoints (1° of lon = 50 mi).
   segments: [
-    { start_mile: 0, end_mile: 50, level: "low", coordinates: [[-100, 40], [-99, 40]] },
-    { start_mile: 50, end_mile: 100, level: "low", coordinates: [[-99, 40], [-98.5, 40], [-98, 40]] },
+    { start_mile: 0, end_mile: 25, level: "low", coordinates: [[-100, 40], [-99.5, 40]] },
+    { start_mile: 25, end_mile: 75, level: "low", coordinates: [[-99.5, 40], [-99, 40], [-98.5, 40]] },
+    { start_mile: 75, end_mile: 100, level: "low", coordinates: [[-98.5, 40], [-98, 40]] },
   ],
 };
 
@@ -61,5 +64,12 @@ describe("truckStateAt", () => {
     if (state?.status !== "driving") return;
     expect(state.mile).toBeCloseTo(75);
     expect(state.coordinate[0]).toBeCloseTo(-98.5, 2);
+  });
+
+  it("finds the segment by mile, not by checkpoint pair", () => {
+    const state = truckStateAt(route, new Date("2026-01-10T09:12:00Z"));
+    if (state?.status !== "driving") throw new Error("expected driving");
+    expect(state.mile).toBeCloseTo(60);
+    expect(state.coordinate[0]).toBeCloseTo(-98.8, 2);
   });
 });

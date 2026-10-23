@@ -11,6 +11,7 @@
   --warning-ink: #8a4b00;
   --error-bg: #fde8e8;
   --error-ink: #9b1c1c;
+  --error-border: #d64545;
   --info-bg: #e7f1fb;
   --info-ink: #174a7c;
   --radius: 10px;
@@ -49,9 +50,64 @@ p {
 /* ---------------------------------------------------------------- layout */
 
 .app {
+  position: relative;
   display: grid;
   grid-template-columns: var(--panel-width) 1fr;
   height: 100dvh;
+}
+
+/* Drag handle on the sidebar's right edge: a wide invisible hit area with a thin line and grip. */
+.panel-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--panel-width) - 5px);
+  width: 10px;
+  z-index: 5;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.panel-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.panel-resizer::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 6px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: 3px;
+  background: var(--line);
+  transition: background 120ms ease;
+}
+
+.panel-resizer:hover::after,
+.panel-resizer:focus-visible::after,
+.app.is-resizing .panel-resizer::after {
+  background: var(--accent);
+}
+
+.panel-resizer:hover::before,
+.panel-resizer:focus-visible::before,
+.app.is-resizing .panel-resizer::before {
+  background: var(--accent);
+}
+
+.app.is-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .panel {
@@ -105,6 +161,9 @@ p {
 }
 
 @media (max-width: 820px) {
+  .panel-resizer {
+    display: none;
+  }
   .app {
     grid-template-columns: 1fr;
     grid-template-rows: 58dvh auto;
@@ -167,6 +226,38 @@ p {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   border-color: transparent;
+}
+
+/* Invalid while typing: red border and tint, red focus ring, message underneath. */
+.field input[aria-invalid="true"] {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+}
+
+.field input[aria-invalid="true"]:focus-visible {
+  outline-color: var(--error-border);
+}
+
+.field__error {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--error-ink);
+}
+
+.field__error:empty {
+  display: none;
+}
+
+.load-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--ink-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  vertical-align: middle;
 }
 
 .field-row {
@@ -349,6 +440,12 @@ p {
   font-size: 14px;
   line-height: 1.4;
   color: #d7e6eb;
+}
+
+.recommendation__load {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #a9c3cc;
 }
 
 .route-card {
@@ -556,6 +653,11 @@ p {
   cursor: pointer;
 }
 
+.toggle--quiet {
+  font-weight: 500;
+  color: var(--muted);
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -575,6 +677,7 @@ p {
   width: 10px;
   height: 10px;
   border-radius: 2px;
+  border: 1.5px solid;
 }
 
 @media (max-width: 820px) {
@@ -751,6 +854,60 @@ p {
   width: 10px;
 }
 
-.route-card.is-expanded:not(.is-selected) {
-  border-color: #9fb3bc;
+/* ---------------------------------------------------------------- playback buttons + ticks */
+
+.heatmap-control__buttons {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.button--quiet {
+  background: var(--surface-alt);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.heatmap-control__track {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.heatmap-control__track .heatmap-control__slider {
+  width: 100%;
+  margin: 0;
+}
+
+/* Native thumbs are ~16px wide, so ticks are inset by half a thumb on each side. */
+.slider-ticks {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -7px;
+  height: 6px;
+  pointer-events: none;
+}
+
+.slider-ticks span {
+  position: absolute;
+  left: calc(var(--at) * 100%);
+  width: 2px;
+  height: 5px;
+  margin-left: -1px;
+  border-radius: 1px;
+}
+
+.slider-ticks .slider-ticks__arrival {
+  width: 3px;
+  height: 8px;
+  margin-left: -1.5px;
+  outline: 1px solid var(--ink);
+}
+
+.status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
 }

@@ -1,18 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useState } from "react";
 import type { Place } from "../../api/types";
 import { geocode } from "../../api/trips";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { FieldError, invalidProps } from "./FieldError";
 
 interface PlaceInputProps {
+  id: string;
   label: string;
   value: Place | null;
   onChange: (place: Place | null) => void;
   placeholder: string;
+  error: string | undefined;
 }
 
-export function PlaceInput({ label, value, onChange, placeholder }: PlaceInputProps) {
-  const id = useId();
+export function PlaceInput({ id, label, value, onChange, placeholder, error }: PlaceInputProps) {
   const listId = `${id}-options`;
   const [text, setText] = useState(value?.label ?? "");
   const [isOpen, setIsOpen] = useState(false);
@@ -46,6 +48,7 @@ export function PlaceInput({ label, value, onChange, placeholder }: PlaceInputPr
         autoComplete="off"
         placeholder={placeholder}
         value={text}
+        {...invalidProps(id, error)}
         onChange={(event) => {
           setText(event.target.value);
           setHighlight(0);
@@ -79,6 +82,7 @@ export function PlaceInput({ label, value, onChange, placeholder }: PlaceInputPr
           }
         }}
       />
+      <FieldError id={id} message={error} />
       {isSearching && (
         <ul id={listId} role="listbox" className="place-input__options">
           {isFetching && options.length === 0 && <li className="muted">Searching…</li>}

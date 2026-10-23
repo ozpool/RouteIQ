@@ -17,13 +17,25 @@ def test_no_travel_miles_rank_before_severe() -> None:
 
 
 def test_ties_fall_through_in_order_and_reason_names_the_ties() -> None:
-    a = route("a", 5, severe=10, high=20, average=0.9)
-    b = route("b", 6, severe=10, high=20, average=0.7)
-    c = route("c", 4, severe=10, high=30, average=0.1)
+    a = route("a", 5, severe=10, high=20, moderate=45)
+    b = route("b", 6, severe=10, high=20, moderate=35)
+    c = route("c", 4, severe=10, high=30)
     result = recommend([a, b, c])
     assert result.ranking == ("b", "a", "c")
     assert result.reason == (
-        "Tied on Severe miles, High miles. Lowest average risk: 0.70 vs 0.90 on Route A."
+        "Tied on Severe miles, High miles. "
+        "Least weather exposure: 105.0 risk-mi vs 115.0 risk-mi on Route A."
+    )
+
+
+def test_a_detour_cannot_dilute_the_same_bad_miles() -> None:
+    # Seattle → Minneapolis on the live app: same 300 Moderate miles, the detour 6 h slower.
+    direct = route("a", 28.4, moderate=300)
+    detour = route("c", 34.7, moderate=300)
+    result = recommend([detour, direct])
+    assert result.route_id == "a"
+    assert result.reason == (
+        "Tied on weather exposure. Shortest travel time: 28h 24m vs 34h 42m on Route C."
     )
 
 

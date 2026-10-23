@@ -73,13 +73,15 @@ class TestOsrm:
         with pytest.raises(NoRouteFound):
             provider.route([DALLAS, FORT_WORTH], alternatives=3)
 
-    def test_rate_limit_is_a_distinct_error(self, monkeypatch) -> None:
-        monkeypatch.setattr("routeiq.adapters.http._BACKOFF_SECONDS", 0)
+    def test_rate_limit_is_a_distinct_error_and_is_not_retried(self) -> None:
+        seen: list = []
         provider = OsrmRoutingProvider(
-            client_returning({"reason": "Too many requests"}, status=429), "https://osrm.test"
+            client_returning({"reason": "Too many requests"}, status=429, seen=seen),
+            "https://osrm.test",
         )
         with pytest.raises(ProviderRateLimited):
             provider.route([DALLAS, FORT_WORTH], alternatives=3)
+        assert len(seen) == 1
 
     def test_server_error_is_provider_error(self) -> None:
         provider = OsrmRoutingProvider(client_returning({}, status=500), "https://osrm.test")
