@@ -7,6 +7,7 @@ recommends a route with a one-line reason. A corridor heatmap with a 0–48 hour
 conditions move along the trip.
 
 **Live app:** https://routeiq-fzde.onrender.com · health check: https://routeiq-fzde.onrender.com/api/health
+· status page: https://stats.uptimerobot.com/T4N5L51NHB
 
 The free Render plan sleeps when idle, so the first request after a quiet spell can take ~50 s.
 Try **Dallas, TX → Chicago, IL** or **Seattle, WA → Minneapolis, MN**: long trips return three
