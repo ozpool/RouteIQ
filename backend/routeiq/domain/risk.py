@@ -82,4 +82,5 @@ def assess(weather: Weather, load_weight_lb: float) -> RiskAssessment:
         rain=rain,
         snow=snow,
         reasons=tuple(reasons),
+        load_raised=wind != base_wind,
     )

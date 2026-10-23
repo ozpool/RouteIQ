@@ -64,6 +64,7 @@ def test_plan_returns_routes_checkpoints_and_recommendation(api: APIClient) -> N
     assert len(data["routes"]) == 3
     route = data["routes"][0]
     assert route["checkpoints"][0]["risk"]["level"] == "low"
+    assert route["checkpoints"][0]["risk"]["load_raised"] is False
     assert route["checkpoints"][0]["coordinate"] == [-100.0, 40.0]
     assert route["segments"][0]["coordinates"][0] == [-100.0, 40.0]
     assert set(route["risk"]["miles_by_level"]) == {

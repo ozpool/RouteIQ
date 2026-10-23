@@ -42,6 +42,7 @@ def _checkpoint(checkpoint: Checkpoint) -> dict[str, Any]:
             "rain": risk.rain.key,
             "snow": risk.snow.key,
             "reasons": list(risk.reasons),
+            "load_raised": risk.load_raised,
         },
     }
 

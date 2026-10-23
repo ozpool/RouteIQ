@@ -36,6 +36,8 @@ class RiskAssessment:
     rain: RiskLevel
     snow: RiskLevel
     reasons: tuple[str, ...]
+    # True when the load rules raised the wind level above what the wind alone gives.
+    load_raised: bool
 
 
 @dataclass(frozen=True, slots=True)
