@@ -186,8 +186,10 @@ the cache).
 
 ## Architecture diagram
 
-[`docs/architecture.png`](docs/architecture.png) shows the system, trip planning, risk scoring,
-route ranking, the heatmap and operations on one board. The editable source is
+[`docs/architecture.png`](docs/architecture.png) shows the request path, how the browser, the
+API, the cache and the providers fit together, what one trip does inside the server, the risk
+and load rules, how routes are ranked (with a live example), the planner screen, and known
+limits. The editable source is
 [`docs/architecture.excalidraw`](docs/architecture.excalidraw); open it at
 [excalidraw.com](https://excalidraw.com) with File → Open.
 
