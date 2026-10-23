@@ -13,11 +13,20 @@ from routeiq.container import get_container
 from routeiq.services.trip_planner import TripRequest
 
 
+# Each throttle needs its own scope: DRF keys the per-IP counter on the scope, and every
+# AnonRateThrottle subclass would otherwise share "anon", so geocode typing used up the plan limit.
 class GeocodeThrottle(AnonRateThrottle):
+    scope = "geocode"
     rate = "60/min"
 
 
-class PlanningThrottle(AnonRateThrottle):
+class PlanThrottle(AnonRateThrottle):
+    scope = "plan"
+    rate = "20/min"
+
+
+class HeatmapThrottle(AnonRateThrottle):
+    scope = "heatmap"
     rate = "20/min"
 
 
@@ -39,7 +48,7 @@ def geocode(request: Request) -> Response:
 
 
 @api_view(["POST"])
-@throttle_classes([PlanningThrottle])
+@throttle_classes([PlanThrottle])
 def plan_trip(request: Request) -> Response:
     body = PlanTripSerializer(data=request.data)
     body.is_valid(raise_exception=True)
@@ -57,7 +66,7 @@ def plan_trip(request: Request) -> Response:
 
 
 @api_view(["POST"])
-@throttle_classes([PlanningThrottle])
+@throttle_classes([HeatmapThrottle])
 def corridor_heatmap(request: Request) -> Response:
     body = HeatmapSerializer(data=request.data)
     body.is_valid(raise_exception=True)
