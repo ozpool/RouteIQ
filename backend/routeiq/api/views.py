@@ -5,6 +5,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
+from config.env import get_settings
+from routeiq.api.health import health_report
 from routeiq.api.presenters import present_heatmap, present_places, present_trip_plan
 from routeiq.api.serializers import GeocodeQuerySerializer, HeatmapSerializer, PlanTripSerializer
 from routeiq.container import get_container
@@ -19,9 +21,10 @@ class PlanningThrottle(AnonRateThrottle):
     rate = "20/min"
 
 
-@api_view(["GET"])
+# GET and HEAD share one response; uptime monitors can use HEAD (body dropped by middleware).
+@api_view(["GET", "HEAD"])
 def health(request: Request) -> Response:
-    return Response({"status": "ok"})
+    return Response(health_report(get_settings()))
 
 
 @api_view(["GET"])

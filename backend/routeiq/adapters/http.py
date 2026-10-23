@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+from routeiq.adapters import provider_status
 from routeiq.ports import ProviderError, ProviderRateLimited
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,27 @@ def get_json(
     """GET and decode JSON. Retries gateway errors; raises ProviderError.
 
     Statuses in `json_error_statuses` return their body so the adapter can read the error code.
+    Every outcome is recorded for the health endpoint.
     """
+    try:
+        data = _get_json(client, provider, url, params, json_error_statuses)
+    except ProviderRateLimited as exc:
+        provider_status.record_failure(provider, exc.message, rate_limited=True)
+        raise
+    except ProviderError as exc:
+        provider_status.record_failure(provider, exc.message, rate_limited=False)
+        raise
+    provider_status.record_success(provider)
+    return data
+
+
+def _get_json(
+    client: httpx.Client,
+    provider: str,
+    url: str,
+    params: dict[str, Any],
+    json_error_statuses: frozenset[int],
+) -> Any:
     attempt = 0
     while True:
         attempt += 1

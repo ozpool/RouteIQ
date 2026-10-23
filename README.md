@@ -232,10 +232,29 @@ What keeps the map smooth:
 
 | Method | Path | Purpose | Rate limit (per IP) |
 |---|---|---|---|
-| GET | `/api/health` | liveness | 120/min |
+| GET, HEAD | `/api/health` | liveness + status of every integrated service; HEAD for uptime monitors | 120/min |
 | GET | `/api/geocode?q=&limit=` | place autocomplete (`q` 2–120 chars, `limit` ≤ 8) | 60/min |
 | POST | `/api/trips/plan` | routes, checkpoints, risk, recommendation | 20/min |
 | POST | `/api/trips/heatmap` | corridor cells × 49 hourly risk scores | 20/min |
+
+Health: GET and HEAD share one handler (HEAD drops the body). It always answers 200, so the
+platform health check never restarts the app over a provider blip. The body reports each service,
+and `status` becomes `"degraded"` when a provider's last call failed or was rate-limited, or the
+cache is down, so a monitor can alert on that keyword. Provider status comes from real traffic:
+the health check itself never calls OSRM, Open-Meteo or Photon, so it spends no quota.
+
+```jsonc
+{ "status": "ok", "time": "2026-10-23T12:16:38Z", "environment": "production",
+  "services": {
+    "routing":   { "provider": "OSRM", "status": "ok", "last_success": "2026-10-23T12:16:36Z", "last_error": null, … },
+    "weather":   { "provider": "Open-Meteo", "status": "rate_limited", "api_key_configured": false,
+                   "last_error": { "at": "…", "message": "HTTP 429: Hourly API request limit exceeded" }, … },
+    "geocoding": { "provider": "Photon", "status": "unknown", … },
+    "cache":     { "backend": "in-memory", "status": "ok", … } } }
+```
+
+`status` per provider: `unknown` (no call since the cache was emptied), `ok`, `rate_limited` or
+`failing`.
 
 Plan a trip:
 

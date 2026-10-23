@@ -2,9 +2,11 @@ from datetime import timedelta
 
 import pytest
 from django.core.cache import cache
+from django.core.handlers.wsgi import WSGIHandler
 from django.utils import timezone
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory
 
+from routeiq.adapters import provider_status
 from routeiq.container import Container
 from routeiq.domain.geo import LatLon
 from routeiq.domain.models import Place
@@ -53,8 +55,53 @@ def plan_body(**overrides):
     return body
 
 
-def test_health(api: APIClient) -> None:
-    assert api.get("/api/health").json() == {"status": "ok"}
+def test_health_reports_every_service_without_calling_providers(api: APIClient) -> None:
+    cache.clear()
+    body = api.get("/api/health").json()
+    assert body["status"] == "ok"
+    assert set(body["services"]) == {"routing", "weather", "geocoding", "cache"}
+    assert body["services"]["routing"]["provider"] == "OSRM"
+    assert body["services"]["weather"]["status"] == "unknown"
+    assert body["services"]["cache"] == {
+        "backend": "in-memory",
+        "used_for": "forecast and geocode responses, provider status",
+        "status": "ok",
+    }
+
+
+def test_health_is_degraded_after_a_provider_fails(api: APIClient) -> None:
+    cache.clear()
+    provider_status.record_success("osrm")
+    provider_status.record_failure(
+        "open-meteo", "HTTP 429: Hourly API request limit exceeded", rate_limited=True
+    )
+    body = api.get("/api/health")
+    assert body.status_code == 200
+    services = body.json()["services"]
+    assert body.json()["status"] == "degraded"
+    assert services["routing"]["status"] == "ok"
+    assert services["routing"]["last_success"] is not None
+    assert services["weather"]["status"] == "rate_limited"
+    assert services["weather"]["last_error"]["message"].startswith("HTTP 429")
+    provider_status.record_success("open-meteo")
+    assert api.get("/api/health").json()["status"] == "ok"
+
+
+def test_health_answers_head_with_the_get_response_minus_the_body(api: APIClient) -> None:
+    assert api.head("/api/health").status_code == 200
+    # Through the real middleware chain: Django's test client strips HEAD bodies itself and
+    # would hide one, so call the WSGI handler directly.
+    handler = WSGIHandler()
+    environ = APIRequestFactory().head("/api/health").environ
+    captured: dict = {}
+    body = b"".join(
+        handler(
+            environ, lambda status, headers: captured.update(status=status, headers=dict(headers))
+        )
+    )
+    assert captured["status"].startswith("200")
+    assert body == b""
+    assert captured["headers"]["Content-Type"] == "application/json"
 
 
 def test_plan_returns_routes_checkpoints_and_recommendation(api: APIClient) -> None:

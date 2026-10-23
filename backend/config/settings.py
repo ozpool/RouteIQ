@@ -19,6 +19,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "routeiq.api.middleware.head_without_body",
 ]
 
 ROOT_URLCONF = "config.urls"
