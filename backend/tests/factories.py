@@ -60,12 +60,13 @@ def route(
     no_travel: float = 0.0,
     severe: float = 0.0,
     high: float = 0.0,
-    average: float = 0.0,
+    moderate: float = 0.0,
 ) -> RouteAssessment:
     miles = dict.fromkeys(RiskLevel, 0.0)
     miles[RiskLevel.NO_TRAVEL] = no_travel
     miles[RiskLevel.SEVERE] = severe
     miles[RiskLevel.HIGH] = high
+    miles[RiskLevel.MODERATE] = moderate
     return RouteAssessment(
         id=route_id,
         label=f"Route {route_id.upper()}",
@@ -77,7 +78,7 @@ def route(
         checkpoints=(),
         risk=RiskSummary(
             miles_by_level=miles,
-            average_risk=average,
+            average_risk=0.0,
             max_level=RiskLevel.LOW,
             segments=(),
         ),

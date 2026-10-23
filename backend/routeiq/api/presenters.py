@@ -60,6 +60,7 @@ def _route(route: RouteAssessment) -> dict[str, Any]:
                 level.key: round(route.risk.miles_by_level[level], 1) for level in RiskLevel
             },
             "average": round(route.risk.average_risk, 2),
+            "exposure": round(route.risk.exposure, 1),
             "max_level": route.risk.max_level.key,
         },
         "checkpoints": [_checkpoint(c) for c in route.checkpoints],
