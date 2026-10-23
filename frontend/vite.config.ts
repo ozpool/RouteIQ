@@ -14,6 +14,11 @@ export default defineConfig({
     sourcemap: true,
     chunkSizeWarningLimit: 900,
     rollupOptions: {
+      // Two pages: a static landing page at / and the planner at /app/.
+      input: {
+        landing: "index.html",
+        app: "app/index.html",
+      },
       output: { manualChunks: { maplibre: ["maplibre-gl"] } },
     },
   },
