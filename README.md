@@ -5,14 +5,13 @@ at each checkpoint for the time the truck will reach it, scores the risk from wi
 and load weight, and recommends the safest route with a one-line reason. A corridor heatmap with
 a 0–48 hour slider shows how conditions change along the way.
 
-- Live app: https://routeiq-fzde.onrender.com
+- Live app: https://routeiq-fzde.onrender.com (the planner itself is at `/app/`)
 - Health check: https://routeiq-fzde.onrender.com/api/health
 - Status page: https://stats.uptimerobot.com/T4N5L51NHB
 
-The app runs on Render's free plan, so the first request after a quiet period can take about 50
-seconds while the server wakes up. Long trips such as Dallas, TX → Chicago, IL or Seattle, WA →
-Minneapolis, MN return three distinct routes; short trips often have only two real options, and
-the app says so rather than inventing a third.
+Long trips such as Dallas, TX → Chicago, IL or Seattle, WA → Minneapolis, MN return three
+distinct routes; short trips often have only two real options, and the app says so rather than
+inventing a third.
 
 ## Walkthrough
 
@@ -45,7 +44,7 @@ Requirements: Python 3.12 with [uv](https://docs.astral.sh/uv/), and Node 20+ wi
 ```bash
 make setup      # create .env from .env.example and install dependencies
 make dev-api    # Django on http://127.0.0.1:8000
-make dev-web    # Vite on http://localhost:5173, proxying /api to Django
+make dev-web    # Vite on http://localhost:5173 (planner at /app/), proxying /api to Django
 ```
 
 Without make:
@@ -182,12 +181,20 @@ provider is down or out of quota.
 
 ## Health check
 
-`GET /api/health` returns the status of each integrated service (OSRM, Open-Meteo, Photon and
-the cache). `HEAD /api/health` returns the same status without a body, for uptime monitors.
+- `GET or HEAD /api/health` returns the status of each integrated service (OSRM, Open-Meteo, Photon and
+the cache). 
+
+## Architecture diagram
+
+[`docs/architecture.png`](docs/architecture.png) shows the system, trip planning, risk scoring,
+route ranking, the heatmap and operations on one board. The editable source is
+[`docs/architecture.excalidraw`](docs/architecture.excalidraw); open it at
+[excalidraw.com](https://excalidraw.com) with File → Open.
 
 ## Project structure
 
 ```
+docs/              architecture diagram (PNG and editable Excalidraw file)
 backend/
   config/          settings and typed environment
   routeiq/
@@ -197,6 +204,9 @@ backend/
     services/      route options, trip planner, corridor heatmap
     api/           request validation, response presenters, views, health, error handling
   tests/
+frontend/
+  index.html       landing page
+  app/index.html   planner page
 frontend/src/
   api/             HTTP client and API types
   config/          typed environment
